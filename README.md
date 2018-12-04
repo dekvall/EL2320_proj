@@ -1,2 +1,7 @@
-# applied_est_proj
-Monocular SLAM with hough
+# Applied estimation project
+
+## SLAM with hough transfrom
+
+Runs on videos with 5 fps
+
+Download script is in scripts
