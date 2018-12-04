@@ -1,6 +1,9 @@
 %% Videoreader
 v = VideoReader('resources/corridor_5_fps.mp4');
 npeaks = 6;
+rows = 1467+floor(1467/2);
+cols = 180+90;
+maxes = zeros(rows, cols);
 while hasFrame(v)
     video = readFrame(v);
     subplot(2,2,[1,3])
@@ -15,6 +18,15 @@ while hasFrame(v)
     P  = houghpeaks(H,npeaks,'threshold',ceil(0.3*max(H(:))));
     x = T(P(:,2)); y = R(P(:,1));
     plot(x,y,'s','color','white');
+    subplot(2,2,4)
+    xc = x + 90*ones(1,npeaks);
+    yc = y + 733*ones(1,npeaks);
+    
+    xc
+    yc
+    
+    maxes(xc,yc) = maxes(xc,yc) + 1;
+    surf(maxes);
     axis on, axis normal
     subplot(2,2,2)
     lines = houghlines(BW,T,R,P,'FillGap',5,'MinLength',7);
