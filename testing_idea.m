@@ -1,6 +1,7 @@
 %% Videoreader
-v = VideoReader('resources/corridor_5_fps.mp4');
-npeaks = 6;
+v = VideoReader('resources/corridor_5_fps.mp4', 'CurrentTime',63);
+npeaks = 4;
+th = 0.6;
 while hasFrame(v)
     video = readFrame(v);
     subplot(2,2,[1,3])
@@ -12,7 +13,7 @@ while hasFrame(v)
     xlabel('\theta'), ylabel('\rho');
     axis on, axis normal, hold on;
 
-    P  = houghpeaks(H,npeaks,'threshold',ceil(0.3*max(H(:))));
+    P  = houghpeaks(H,npeaks,'threshold',ceil(th*max(H(:))));
     x = T(P(:,2)); y = R(P(:,1));
     plot(x,y,'s','color','white');
     axis on, axis normal
@@ -35,5 +36,5 @@ while hasFrame(v)
           xy_long = xy;
        end
     end
-    pause(0.3);
+    pause(0.15);
 end
