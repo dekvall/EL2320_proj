@@ -1,9 +1,11 @@
 %% Videoreader
 v = VideoReader('resources/corridor_5_fps.mp4', 'CurrentTime',63);
 npeaks = 4;
-th = 0.6;
+th = 0.9;
 while hasFrame(v)
-    video = readFrame(v);
+    orig = readFrame(v);
+    %video = imcrop(orig, [0,230, 640,360]);
+    video = orig;
     subplot(2,2,[1,3])
     I  = rgb2gray(video);
     BW = edge(I,'canny');
@@ -17,6 +19,8 @@ while hasFrame(v)
     x = T(P(:,2)); y = R(P(:,1));
     plot(x,y,'s','color','white');
     axis on, axis normal
+    subplot(2,2,4)
+    imshow(orig)
     subplot(2,2,2)
     lines = houghlines(BW,T,R,P,'FillGap',5,'MinLength',7);
     imshow(I), hold on
