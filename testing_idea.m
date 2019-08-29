@@ -1,5 +1,5 @@
 %% Videoreader
-v = VideoReader('resx/corridor_5_fps.mp4', 'CurrentTime',63);
+v = VideoReader('resx/vid_3_lq_5.mp4');
 npeaks = 4;
 th = 0.9;
 while hasFrame(v)
