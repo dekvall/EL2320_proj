@@ -1,6 +1,6 @@
 # Applied estimation project
 
-## Intorduction
+## Introduction
 
 ### Proposal
 We propose a 2D mapping of a corridor environment with the help of hough transform by using the vertical components of the image as possible landmarks. The video used will be filmed at a constant speed and with no lateral movement so that the position of the observer will be known for each frame.
