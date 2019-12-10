@@ -1,0 +1,58 @@
+\documentclass[a4paper,11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+\usepackage{amsmath,amssymb,amsthm,amsfonts}
+\usepackage{cleveref}
+\usepackage{gensymb}
+\usepackage{graphicx}
+\usepackage[backend=biber,sorting=none]{biblatex}
+\addbibresource{bib/bibliography.bib}
+\graphicspath{{img/}}
+
+\title{
+	Create a map with hough transform\\
+	EL2320 Applied Estimation
+}
+\author{
+	David Ekvall\\
+	dekvall@kth.se\\
+	\and
+	Daniel Ahlberg\\
+	ahlberg2@kth.se\\
+}
+
+\newcommand{\image}[3][width=0.9\columnwidth]{
+	\begin{figure}[h!]
+		\centering
+	    \includegraphics[#1]{#2}
+		\caption{#3}
+		\label{fig:#2}
+	\end{figure}
+}
+
+\begin{document}
+\maketitle
+\abstract{This is the abstract}
+
+\section{Introduction}
+1-2 pages
+
+\section{Related wowrk}
+1-2 pages \cite{reed2016generative}
+
+\section{My method}
+1-4 pages
+
+\section{Implementation}
+0-2 pages
+
+\section{Results}
+1-4 pages
+
+\section{Conclusion}
+0.5 - 1 page
+
+\printbibliography
+
+\end{document}
