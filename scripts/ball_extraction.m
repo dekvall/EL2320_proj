@@ -1,5 +1,5 @@
 clear workspace;
-video_name = "4-balls-good.mp4";
+video_name = "4-balls-high.mp4";
 path = "../resx";
 video_path = join([path, video_name],"/");
 v = VideoReader(char(video_path));
@@ -17,8 +17,8 @@ while hasFrame(v)
     not_green_val_sat = find(0.2 > hsv_img(:,:,2));
     gray_frame(not_green_val_sat) = 0;
     gray_frame(not_green_val) = 0;
-    %[centers, radii, metric] = imfindcircles(gray_frame,[10,50]);
-    %viscircles(centers, radii, 'EdgeColor', 'b');       
+    [centers, radii, metric] = imfindcircles(gray_frame,[15,30], 'Sensitivity', 0.95, 'EdgeThreshold', 0);
     imshow(gray_frame)
+    viscircles(centers, radii, 'EdgeColor', 'r');       
     pause(1/v.FrameRate);
 end
