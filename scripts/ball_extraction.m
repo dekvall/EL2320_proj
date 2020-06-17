@@ -24,8 +24,11 @@ while hasFrame(v)
     not_green_val_sat = find(0.2 > hsv_img(:,:,2));
     gray_frame(not_green_val_sat) = 0;
     gray_frame(not_green_val) = 0;
-    [centers, radii, metric] = imfindcircles(gray_frame,[15,30], 'Sensitivity', 0.95, 'EdgeThreshold', 0);
+    gray_frame = imgaussfilt(gray_frame,2);
+    
+
+    [centers, radii, metric] = imfindcircles(gray_frame,[7,10], 'Sensitivity', 0.98, 'EdgeThreshold', 0.3);
     imshow(gray_frame), hold on
-    viscircles(centers, radii, 'EdgeColor', 'r')
+    viscircles(centers, radii, 'EdgeColor', 'r');
     pause(0.15);
 end
