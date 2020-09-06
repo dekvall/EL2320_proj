@@ -7,9 +7,10 @@ import seaborn as sns
 from operator import add
 
 #cap = cv2.VideoCapture('../resx/small/2x1-short-small.mp4')
-cap = cv2.VideoCapture('../resx/small/4-balls-low-small.mp4')
+#cap = cv2.VideoCapture('../resx/small/4-balls-low-small.mp4')
+cap = cv2.VideoCapture('../resources/small/ex1-small.mp4')
 
-LOWER = (30, 100, 100)
+LOWER = (30, 50, 50)
 UPPER = (60, 255, 255)
 
 graph = []
@@ -34,7 +35,7 @@ def detect_with_blob(frame, first):
 	masked = cv2.bitwise_and(frame, frame, mask=mask)
 	gray = cv2.cvtColor(masked, cv2.COLOR_BGR2GRAY)
 
-	# Blob detection with black backgreound requires the image to be inverted
+	# Blob detection with black background requires the image to be inverted
 	inverted = cv2.bitwise_not(gray)
 	keypoints = detector.detect(inverted)
 
@@ -49,42 +50,61 @@ def detect_with_blob(frame, first):
 	result = cv2.drawKeypoints(frame, keypoints, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
 	return result
 
-def detect_with_hough(frame, first):
-	diff = cv2.absdiff(fullgray, first)
-	cv2.imshow('diff',diff)
-	cv2.waitKey(50)
-	circles = cv2.HoughCircles(diff, cv2.HOUGH_GRADIENT, .3, minDist=5,
-							param1=200, param2=40, minRadius=7, maxRadius=10)
+def detect_with_diff(frame, first):
+	detector = cv2.SimpleBlobDetector_create()
 
-	if circles is None:
-		return frame
+	hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+	hsv_first = cv2.cvtColor(first, cv2.COLOR_BGR2HSV)
 
-	circles = np.uint16(np.around(circles))
-	for i in circles[0,:]:
-		cv2.circle(frame,(i[0],i[1]),i[2],(0,255,0),2)
-	return frame
 
+	mask = cv2.inRange(hsv_frame, LOWER, UPPER)
+	masked_frame = cv2.bitwise_and(frame, frame, mask=mask)
+	masked_first = cv2.bitwise_and(first, first, mask=mask)
+
+
+	diff = cv2.absdiff(masked_frame, masked_first)
+	mask = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
+	imask = mask > 1 # threshold is 1
+
+	canvas = np.zeros_like(frame, np.uint8)
+	canvas[imask] = frame[imask]
+
+	fullgray = cv2.cvtColor(canvas, cv2.COLOR_BGR2GRAY)
+
+	# Blob detection with black background requires the image to be inverted
+	inverted = cv2.bitwise_not(fullgray)
+	keypoints = detector.detect(inverted)
+
+	if keypoints:
+		height, width = fullgray.shape
+		x, y = keypoints[0].pt
+		y = height - y
+
+		graph.append((x, y))
+		snapshots.append(fullgray)
+
+	result = cv2.drawKeypoints(frame, keypoints, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+	return result
+
+	# cv2.imshow('diff',fullgray)
+	# cv2.waitKey(50)
 
 while cap.isOpened():
 	ret, frame = cap.read()
 	if not ret or cv2.waitKey(1) & 0xFF == ord('q'):
 		break
 
-	fullgray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 	if first is None:
-		first = fullgray
+		first = frame
 		continue
 
-	result = detect_with_hough(fullgray, first)
-	res2 = detect_with_blob(frame, first)
+	diff_result = detect_with_diff(frame, first)
 
 
-	cv2.imshow('frame',fullgray)
-	cv2.waitKey(50)
+	#cv2.imshow('Original',frame)
+	#v2.imshow('Blob/diff detect', diff_result)
+	#cv2.waitKey(50)
 
-
-	cv2.imshow('frame2',res2)
-	cv2.waitKey(50)
 
 cap.release()
 cv2.destroyAllWindows()
@@ -96,6 +116,5 @@ base = snapshots[0]
 for img in snapshots:
 	base = cv2.bitwise_or(base, img)
 
-plt.imshow(base)
+plt.imshow(base, cmap='gray')
 plt.show()
-
