@@ -14,6 +14,7 @@ LOWER = (30, 50, 50)
 UPPER = (60, 255, 255)
 
 graph = []
+kf_graph = []
 snapshots = []
 first = None
 
@@ -116,6 +117,7 @@ while cap.isOpened():
 
 	if detection is not None:
 		x, y = detection
+		print(x, y)
 		if first_detection:
 			first_detection = False
 			print("Init kalman filter")
@@ -131,11 +133,10 @@ while cap.isOpened():
 									dtype="float64")
 			kf.correct(measurements)
 
+	x_pred, y_pred = kf.statePost.ravel()[:2]
+
 	if not first_detection:
-		y_pred, y_vel_pred = kf.statePost[1][0], kf.statePost[3][0]
-		print("y-pos: ", y_pred, ", y_vel: ", y_vel_pred)
-		check = False
-		if y_pred < 0:
+		if y_pred < .2:
 			print("bounce")
 			kf.transitionMatrix[3,3] = -1*BOUNCE_COEFF
 
@@ -144,20 +145,23 @@ while cap.isOpened():
 		# Restore to normal model
 		kf.transitionMatrix[3,3] = 1
 
+		x_pred, y_pred = kf.statePost.ravel()[:2]
+		kf_graph.append((x_pred, y_pred))
 
 
-
-
-
-	cv2.imshow('Original',frame)
-	cv2.imshow('Blob/diff detect', diff_result)
-	cv2.waitKey(50)
+	#cv2.imshow('Original',frame)
+	#cv2.imshow('Blob/diff detect', diff_result)
+	#cv2.waitKey(50)
 
 
 cap.release()
 cv2.destroyAllWindows()
 
-sns.scatterplot(*zip(*graph))
+true_pos = zip(*graph)
+kalman_pos = zip(*kf_graph)
+
+plt.scatter(*true_pos)
+plt.plot(*kalman_pos, 'ro-')
 plt.show()
 
 base = snapshots[0]
