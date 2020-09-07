@@ -8,7 +8,7 @@ from operator import add
 
 #cap = cv2.VideoCapture('../resx/small/2x1-short-small.mp4')
 #cap = cv2.VideoCapture('../resx/small/4-balls-low-small.mp4')
-cap = cv2.VideoCapture('../resources/small/ex1-small.mp4')
+cap = cv2.VideoCapture('../resources/small/ex6-one-small.mp4')
 
 LOWER = (30, 50, 50)
 UPPER = (60, 255, 255)
@@ -96,8 +96,6 @@ def detect_with_diff(frame, first):
 	result = cv2.drawKeypoints(frame, keypoints, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
 	return graph[-1] if keypoints else None, result
 
-	# cv2.imshow('diff',fullgray)
-	# cv2.waitKey(50)
 
 # Kalman initzialisation
 kf = init_kalman_filter()
@@ -149,9 +147,11 @@ while cap.isOpened():
 
 
 
-	#cv2.imshow('Original',frame)
-	#v2.imshow('Blob/diff detect', diff_result)
-	#cv2.waitKey(50)
+
+
+	cv2.imshow('Original',frame)
+	cv2.imshow('Blob/diff detect', diff_result)
+	cv2.waitKey(50)
 
 
 cap.release()
