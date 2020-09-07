@@ -17,6 +17,11 @@ graph = []
 snapshots = []
 first = None
 
+G = 9.8
+DT = 1/30
+BOUNCE_COEFF = 0.7 #Arbitrary
+PIXEL_SCALE = .007 #Size of pixel in m for a resolution of 320x240
+
 def create_blob_params():
 	# Setup SimpleBlobDetector parameters.
 	params = cv2.SimpleBlobDetector_Params()
@@ -28,27 +33,29 @@ def create_blob_params():
 
 	return params
 
-def detect_with_blob(frame, first):
-	detector = cv2.SimpleBlobDetector_create()
-	hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-	mask = cv2.inRange(hsv, LOWER, UPPER)
-	masked = cv2.bitwise_and(frame, frame, mask=mask)
-	gray = cv2.cvtColor(masked, cv2.COLOR_BGR2GRAY)
+def init_kalman_filter():
+	kf = cv2.KalmanFilter(4, 2, 2)
+	kf.transitionMatrix = np.array([[1, 0, DT, 0],
+									[0, 1, 0, DT],
+									[0, 0, 1, 0],
+									[0, 0, 0, 1]])
+	
+	kf.controlMatrix = np.array([[0, 0],
+								[1., 0],
+								[0, 0],
+								[0, 1.]])
+	
+	kf.measurementMatrix = np.array([[1., 0, 0, 0],
+									[0, 1., 0, 0]])
 
-	# Blob detection with black background requires the image to be inverted
-	inverted = cv2.bitwise_not(gray)
-	keypoints = detector.detect(inverted)
+	kf.processNoiseCov = 1e-2 * np.eye(4)
 
-	if keypoints:
-		height, width = gray.shape
-		x, y = keypoints[0].pt
-		y = height - y
+	kf.measurementNoiseCov = 1e-5 * np.eye(2)
 
-		graph.append((x, y))
-		snapshots.append(masked)
+	#Belief in initial state
+	kf.errorCovPost = 1. * np.ones((4,4))
 
-	result = cv2.drawKeypoints(frame, keypoints, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-	return result
+	return kf
 
 def detect_with_diff(frame, first):
 	detector = cv2.SimpleBlobDetector_create()
@@ -80,14 +87,23 @@ def detect_with_diff(frame, first):
 		x, y = keypoints[0].pt
 		y = height - y
 
+		x *= PIXEL_SCALE
+		y *= PIXEL_SCALE
+
 		graph.append((x, y))
 		snapshots.append(fullgray)
 
 	result = cv2.drawKeypoints(frame, keypoints, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-	return result
+	return graph[-1] if keypoints else None, result
 
 	# cv2.imshow('diff',fullgray)
 	# cv2.waitKey(50)
+
+# Kalman initzialisation
+kf = init_kalman_filter()
+const_mat = np.array([[-1/2*G*DT**2], [-G*DT]])
+
+first_detection = True
 
 while cap.isOpened():
 	ret, frame = cap.read()
@@ -98,7 +114,39 @@ while cap.isOpened():
 		first = frame
 		continue
 
-	diff_result = detect_with_diff(frame, first)
+	detection, diff_result = detect_with_diff(frame, first)
+
+	if detection is not None:
+		x, y = detection
+		if first_detection:
+			first_detection = False
+			print("Init kalman filter")
+			kf.statePost = np.array([[x],
+									[y],
+									[.2],
+									[-1]],
+									dtype='float64')
+		else:
+			print("Ball detected")
+			measurements = np.array([[x],
+									[y]],
+									dtype="float64")
+			kf.correct(measurements)
+
+	if not first_detection:
+		y_pred, y_vel_pred = kf.statePost[1][0], kf.statePost[3][0]
+		print("y-pos: ", y_pred, ", y_vel: ", y_vel_pred)
+		check = False
+		if y_pred < 0:
+			print("bounce")
+			kf.transitionMatrix[3,3] = -1*BOUNCE_COEFF
+
+		kf.predict(const_mat)
+
+		# Restore to normal model
+		kf.transitionMatrix[3,3] = 1
+
+
 
 
 	#cv2.imshow('Original',frame)
