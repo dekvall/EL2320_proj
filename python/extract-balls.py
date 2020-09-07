@@ -15,6 +15,7 @@ UPPER = (60, 255, 255)
 
 graph = []
 kf_graph = []
+kf_graph_corrected = []
 snapshots = []
 first = None
 
@@ -94,8 +95,8 @@ def detect_with_diff(frame, first):
 		graph.append((x, y))
 		snapshots.append(fullgray)
 
-	result = cv2.drawKeypoints(frame, keypoints, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-	return graph[-1] if keypoints else None, result
+	result = cv2.drawKeypoints(frame, keypoints, np.array([]), (255,0,0), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+	return graph[-1] if keypoints else None, cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
 
 
 # Kalman initzialisation
@@ -106,6 +107,7 @@ first_detection = True
 
 i = 0
 last_bounce = 0
+
 while cap.isOpened():
 	ret, frame = cap.read()
 	if not ret or cv2.waitKey(1) & 0xFF == ord('q'):
@@ -119,7 +121,6 @@ while cap.isOpened():
 
 	if detection is not None:
 		x, y = detection
-		print(x, y)
 		if first_detection:
 			first_detection = False
 			print("Init kalman filter")
@@ -140,6 +141,7 @@ while cap.isOpened():
 	if not first_detection:
 		if y_pred < .2 and i > last_bounce + 10:
 			print("bounce")
+			print(y_pred)
 			last_bounce = i
 			kf.transitionMatrix[3,3] = -1*BOUNCE_COEFF
 
@@ -148,25 +150,31 @@ while cap.isOpened():
 		# Restore to normal model
 		kf.transitionMatrix[3,3] = 1
 
+		height, width, *_ = diff_result.shape
+
 		x_pred, y_pred = kf.statePost.ravel()[:2]
 		kf_graph.append((x_pred, y_pred))
+		kf_graph_corrected.append((x_pred/PIXEL_SCALE, -y_pred/PIXEL_SCALE + height)) 
 
+		true_pos = zip(*graph)
+		kalman_pos = zip(*kf_graph)
+		kalman_corrected = zip(*kf_graph_corrected)
+		plt.figure(1)
+		plt.ylim(0, 1.3)
+		plt.xlim(0,2)
+		plt.scatter(*true_pos, c='b')
+		plt.plot(*kalman_pos, 'ro-')
+
+		plt.figure(2)
+		plt.imshow(diff_result)
+		plt.plot(*kalman_corrected, 'ro-')
+		plt.pause(.05)
+		plt.clf()
 	i += 1
-
-	#cv2.imshow('Original',frame)
-	#cv2.imshow('Blob/diff detect', diff_result)
-	#cv2.waitKey(50)
 
 
 cap.release()
 cv2.destroyAllWindows()
-
-true_pos = zip(*graph)
-kalman_pos = zip(*kf_graph)
-
-plt.scatter(*true_pos)
-plt.plot(*kalman_pos, 'ro-')
-plt.show()
 
 base = snapshots[0]
 for img in snapshots:
