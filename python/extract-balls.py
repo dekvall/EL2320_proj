@@ -52,7 +52,7 @@ def init_kalman_filter():
 
 	kf.processNoiseCov = 1e-2 * np.eye(4)
 
-	kf.measurementNoiseCov = 1e-5 * np.eye(2)
+	kf.measurementNoiseCov = 1e-4 * np.eye(2)
 
 	#Belief in initial state
 	kf.errorCovPost = 1. * np.ones((4,4))
@@ -130,7 +130,6 @@ while cap.isOpened():
 									[-1]],
 									dtype='float64')
 		else:
-			print("Ball detected")
 			measurements = np.array([[x],
 									[y]],
 									dtype="float64")
@@ -146,6 +145,8 @@ while cap.isOpened():
 			kf.transitionMatrix[3,3] = -1*BOUNCE_COEFF
 
 		kf.predict(const_mat)
+		kf.statePost = kf.statePre
+		kf.errorCovPre = kf.errorCovPost
 
 		# Restore to normal model
 		kf.transitionMatrix[3,3] = 1
