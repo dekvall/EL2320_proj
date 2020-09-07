@@ -104,6 +104,8 @@ const_mat = np.array([[-1/2*G*DT**2], [-G*DT]])
 
 first_detection = True
 
+i = 0
+last_bounce = 0
 while cap.isOpened():
 	ret, frame = cap.read()
 	if not ret or cv2.waitKey(1) & 0xFF == ord('q'):
@@ -136,8 +138,9 @@ while cap.isOpened():
 	x_pred, y_pred = kf.statePost.ravel()[:2]
 
 	if not first_detection:
-		if y_pred < .2:
+		if y_pred < .2 and i > last_bounce + 10:
 			print("bounce")
+			last_bounce = i
 			kf.transitionMatrix[3,3] = -1*BOUNCE_COEFF
 
 		kf.predict(const_mat)
@@ -148,6 +151,7 @@ while cap.isOpened():
 		x_pred, y_pred = kf.statePost.ravel()[:2]
 		kf_graph.append((x_pred, y_pred))
 
+	i += 1
 
 	#cv2.imshow('Original',frame)
 	#cv2.imshow('Blob/diff detect', diff_result)
