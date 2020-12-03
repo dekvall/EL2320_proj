@@ -15,7 +15,7 @@ def propagate_point(t_start: float, t_end: float, state: list, dt: float =.05) -
 	propagated state at t_end
 	"""
 	G = 9.82
-	BOUNCE_COEFF = 0.84 # Tennis balls
+	BOUNCE_COEFF = .84 # Tennis balls
 
 	#trajectory start
 	xt = state
@@ -23,8 +23,8 @@ def propagate_point(t_start: float, t_end: float, state: list, dt: float =.05) -
 
 	t = t_start
 
-	while t < t_end:
-		dt = min(dt, t_end - t_start)
+	while t < t_end - 1e-16:
+		dt = min(dt, t_end - t)
 		t += dt
 
 		x, y, vx, vy = state
@@ -36,25 +36,24 @@ def propagate_point(t_start: float, t_end: float, state: list, dt: float =.05) -
 		else:
 			dT = (vy + root**.5) / G
 
+		# Never go back in time
 		dT = max(0, dT)
 
 		if dT < dt:
 			# Bounce
-			vyn = - BOUNCE_COEFF * (vy - G * dT)
+			vy = -BOUNCE_COEFF * (vy - G * dT)
 			dT = dt - dT # Bounce time
-			yn = 0 + vyn * dT - .5 * G * dT**2
-			vyn = vyn - 9.81 * dT # update velocity for remainder f step
-
-
+			y = 0 + vy * dT - .5 * G * dT**2
+			vy = vy - G * dT # update velocity for remainder f step
 		else:
 			# No bounce
-			yn = y + vy + dt - .5 * G * dt**2
-			vyn = vy - G * dt
+			y = y + vy * dt - .5 * G * dt**2
+			vy = vy - G * dt
 
-		xn = x + vx * dt
-		vxn = vx
+		x = x + vx * dt
+		vx = vx
 
-		state = np.array([xn, yn, vxn, vyn])
+		state = np.array([x, y, vx, vy])
 		points.append(state)
 	return state
 
@@ -63,7 +62,7 @@ def propagate_point(t_start: float, t_end: float, state: list, dt: float =.05) -
 
 if __name__ == "__main__":
 	points = []
-	x = np.array([2,2,.4,0])
+	x = np.array([0,2,.4, 0])
 	xn = propagate_point(0, 2, x)
 
 
