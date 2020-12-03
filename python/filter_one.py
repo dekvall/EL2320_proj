@@ -44,4 +44,31 @@ plt.grid()
 plt.show()
 
 
-# Use now use a particle filter
+def prop_f(t_start, t_end, state, u=0, proc_noise=None):
+	x, *_ = propagate_state(t_start, t_end, state)
+	return x
+
+def measurement_f(t, x, u=0):
+	return x[:2]
+
+# particle filter
+def filter_for_one(t_before, t_k, X_before, w_before, u_before, z_k, f, h):
+	"""
+	*_before: values for * at k-1
+	t_k: time for current measurement
+	z_k: measurement at k
+	f: propagation function
+	h: measurement function
+
+	return
+	x_hat: mean state estimate for k
+	X_k: particle set for k
+	w_k: particle weights for k
+	"""
+
+	# Maybe just use a normal for-loop
+	X_new = np.apply_along_axis(lambda r: f(t_before, t_k, r), axis=1, arr=X_before)
+	Z_new = np.apply_along_axis(lambda r: h(t_k, r), axis=1, arr=X_new)
+	w_new = np.apply_along_axis(lambda r: r[0] * 0.3, arr=np.concatenate((X_new, Z_new))) # Actually observation error
+
+
