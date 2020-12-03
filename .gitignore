@@ -15,3 +15,5 @@
 *.m~
 *.slxc
 *.autosave
+#python
+*.pyc

@@ -3,7 +3,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def propagate_point(t_start: float, t_end: float, state: list, dt: float =.05) -> list:
+def propagate_state(t_start: float, t_end: float, state: list, dt: float =.05) -> list:
 	"""
 	in:
 	t_start: Simulation start time
@@ -31,7 +31,7 @@ def propagate_point(t_start: float, t_end: float, state: list, dt: float =.05) -
 
 
 		tree = vy**2 + 2 * G * y
-		
+
 		if tree < 0:
 			dT = 0
 		else:
