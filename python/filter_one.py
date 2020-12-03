@@ -9,7 +9,7 @@ from numpy.random import multivariate_normal, rand
 
 np.random.seed(69)
 # Set up initial state and measurement with noise
-x0 = np.array([0, 2, 1.5, 0])
+x0 = np.array([0, 3, 2, -1])
 R = 0.15**2 * np.eye(2)
 z0 = multivariate_normal(x0[:2], R)
 
@@ -132,6 +132,7 @@ for t in np.arange(0, 10, dt):
 	plt.pause(dt)
 	plt.clf()
 	# Ground truth
-	xk, *_ = propagate_state(t, t+dt, xk)
+	xk, state_traj, *_ = propagate_state(t, t+dt, xk)
 	zk = multivariate_normal(xk[:2], R)
+	plt.plot(state_traj[:,0], state_traj[:,1], c='g')
 
