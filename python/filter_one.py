@@ -6,6 +6,8 @@ from scipy.linalg import block_diag
 import matplotlib.pyplot as plt
 from numpy.random import multivariate_normal, rand
 
+
+np.random.seed(69)
 # Set up initial state and measurement with noise
 x0 = np.array([0, 2, 1.5, 0])
 R = 0.15**2 * np.eye(2)
@@ -58,6 +60,11 @@ def filter_for_one(t_before, t_k, X_before, w_before, u_before, z_k, f, h, obs_e
 	N, nx = X_before.shape
 	nz, = z_k.shape
 
+	# Not sure how well this works,
+	# but it's an optimal gaussian tuning parameter
+	# The particles spread out less
+	tune = (4/(N * (nx + 2)))**(1/(nx + 4));
+
 
 	X_new = np.zeros((N, nx))
 	Z_new = np.zeros((N, nz))
@@ -91,7 +98,7 @@ def filter_for_one(t_before, t_k, X_before, w_before, u_before, z_k, f, h, obs_e
 
 	P = np.cov(X_new.T) #rows are variables and cols are observations
 
-	X_new = np.apply_along_axis(lambda r: multivariate_normal(mean=r, cov=P), axis=1, arr=X_new)
+	X_new = np.apply_along_axis(lambda r: multivariate_normal(mean=r, cov=tune * P), axis=1, arr=X_new)
 	x_hat = np.average(X_new, axis=0, weights=w_new)
 
 	return x_hat, X_new, w_new
