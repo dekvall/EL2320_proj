@@ -18,7 +18,7 @@ invR = np.linalg.inv(R)
 # Initial state estimate
 xh0 = np.array([*z0, 1, 0])
 P0 = block_diag(R, 2**2 * np.eye(2))
-nX = 100 # Number of particles
+nX = 500 # Number of particles
 X = multivariate_normal(xh0, P0, size=nX)
 w = 1/nX * np.ones((nX,))
 
@@ -87,7 +87,7 @@ def filter_for_one(t_before, t_k, X_before, w_before, u_before, z_k, f, h, obs_e
 	w_new = np.repeat(1/N, N)
 
 	# Perturb the new particles a little, i should probably not do this with P0 but rather with something correlated with the measurement
-	X_new = np.apply_along_axis(lambda r: multivariate_normal(mean=r, cov=P0), axis=1, arr=X_new)
+	# X_new = np.apply_along_axis(lambda r: multivariate_normal(mean=r, cov=P0), axis=1, arr=X_new)
 	
 
 	return x_hat, X_new, w_new
@@ -96,12 +96,6 @@ def filter_for_one(t_before, t_k, X_before, w_before, u_before, z_k, f, h, obs_e
 	# X_new = np.apply_along_axis(lambda r: f(t_before, t_k, r), axis=1, arr=X_before)
 	# Z_new = np.apply_along_axis(lambda r: h(t_k, r), axis=1, arr=X_new)
 	# w_new = np.apply_along_axis(lambda r: r[0] * 0.3, arr=np.concatenate((X_new, Z_new))) # Actually observation error
-
-
-# Ground truth
-tk = 1
-xk, *_ = propagate_state(0, tk, x0)
-zk = multivariate_normal(xk[:2], R)
 
 xk = x0
 zk = z0
