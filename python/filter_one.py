@@ -4,7 +4,7 @@ from propagate_state import propagate_state
 import numpy as np
 from scipy.linalg import block_diag
 import matplotlib.pyplot as plt
-from numpy.random import multivariate_normal
+from numpy.random import multivariate_normal, rand
 
 # Set up initial state and measurement with noise
 x0 = np.array([0, 2, 1.5, 0])
@@ -29,14 +29,14 @@ w = 1/nX * np.ones((nX,))
 #plt.scatter(X[:,0], X[:,1], marker=".", c='b', label="Propagated Particle")
 #plt.show()
 
-def prop_f(t_start, t_end, state, u=0, proc_noise=None):
+def prop_f(t_start, t_end, state):
 	x, *_ = propagate_state(t_start, t_end, state)
 	return x
 
-def measurement_f(t, x, u=0):
+def measurement_f(x):
 	return x[:2]
 
-def obs_error_p(t, dz):
+def obs_error_p(dz):
 	# Gaussian error which will be normalized later
 	return np.exp(-.5 * dz.T @ invR  @ dz)
 
@@ -65,15 +65,30 @@ def filter_for_one(t_before, t_k, X_before, w_before, u_before, z_k, f, h, obs_e
 
 	for i in range(N):
 		X_new[i, :] = f(t_before, t_k, X_before[i, :])
-		Z_new[i, :] = h(t_k, X_new[i, :])
-		w_new[i] = w_before[i] * obs_error(t_k, \
-										z_k - Z_new[i, :])
-	
-	w_new /= w_new.max()
+		Z_new[i, :] = h(X_new[i, :])
+		w_new[i] = w_before[i] * obs_error(z_k - Z_new[i, :])
+	w_new /= w_new.sum()
 
 	x_hat = np.average(X_new, axis=0, weights=w_new)
 
-	# resample here if needed
+	# Systematic resampling, because superior
+	cdf = np.cumsum(w_new)
+	n_draws = N
+	ind = np.zeros(n_draws, dtype=int)
+	draws = np.sort(rand(n_draws))
+
+	ci = 0
+	for di in range(n_draws):
+		while cdf[ci] < draws[di] and ci < N:
+			ci += 1
+		ind[di] = ci
+
+	X_new = X_new[ind]
+	w_new = np.repeat(1/N, N)
+
+	# Perturb the new particles a little, i should probably not do this with P0 but rather with something correlated with the measurement
+	X_new = np.apply_along_axis(lambda r: multivariate_normal(mean=r, cov=P0), axis=1, arr=X_new)
+	
 
 	return x_hat, X_new, w_new
 
@@ -93,17 +108,18 @@ zk = z0
 
 dt = .2
 # Loop for 10 secs
-for t in np.arange(0,10,dt):
-	plt.scatter(X[:,0], X[:,1], marker=".", c='r', label="Particle")
+for t in np.arange(0, 10, dt):
 	plt.xlabel("X [m]")
 	plt.ylabel("Y [m]")
 	ax = plt.gca()
 	ax.set_xlim(-1, 11)
 	ax.set_ylim(0, 5)
-	plt.scatter(zk[0], zk[1], c='y', label="Measurement")
 
 	x_hat, X, w = filter_for_one(t, t+dt, X, w, 0, zk, prop_f, measurement_f, obs_error_p)
 	
+	# A posteriori
+	plt.scatter(X[:,0], X[:,1], marker=".", c='r', label="Particle")
+	plt.scatter(zk[0], zk[1], c='y', label="Measurement")
 	plt.scatter(x_hat[0], x_hat[1], c='m', label="Approximation")
 	plt.scatter(xk[0], xk[1], c='g', label="Ground truth")
 	plt.legend()
