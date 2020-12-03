@@ -18,7 +18,7 @@ invR = np.linalg.inv(R)
 # Initial state estimate
 xh0 = np.array([*z0, 1, 0])
 P0 = block_diag(R, 2**2 * np.eye(2))
-nX = 500 # Number of particles
+nX = 100 # Number of particles
 X = multivariate_normal(xh0, P0, size=nX)
 w = 1/nX * np.ones((nX,))
 
@@ -69,8 +69,6 @@ def filter_for_one(t_before, t_k, X_before, w_before, u_before, z_k, f, h, obs_e
 		w_new[i] = w_before[i] * obs_error(z_k - Z_new[i, :])
 	w_new /= w_new.sum()
 
-	x_hat = np.average(X_new, axis=0, weights=w_new)
-
 	# Systematic resampling, because superior
 	cdf = np.cumsum(w_new)
 	n_draws = N
@@ -87,8 +85,14 @@ def filter_for_one(t_before, t_k, X_before, w_before, u_before, z_k, f, h, obs_e
 	w_new = np.repeat(1/N, N)
 
 	# Perturb the new particles a little, i should probably not do this with P0 but rather with something correlated with the measurement
-	# X_new = np.apply_along_axis(lambda r: multivariate_normal(mean=r, cov=P0), axis=1, arr=X_new)
-	
+	# Yes, just use the sample covariance
+	# This does not work, idk why, it should!
+	# P = 1 / (N - 1) * (X_new - X_new.mean()).T @ (X_new - X_new.mean())
+
+	P = np.cov(X_new.T) #rows are variables and cols are observations
+
+	X_new = np.apply_along_axis(lambda r: multivariate_normal(mean=r, cov=P), axis=1, arr=X_new)
+	x_hat = np.average(X_new, axis=0, weights=w_new)
 
 	return x_hat, X_new, w_new
 
