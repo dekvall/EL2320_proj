@@ -57,7 +57,7 @@ def propagate_point(t_start: float, t_end: float, state: list, dt: float =.05) -
 			vy = vy - G * dt
 
 		x = x + vx * dt
-		vx = vx
+		vx = 0.98 * vx #Approximate drag
 
 		state = [x, y, vx, vy]
 		state_traj.append(state)
