@@ -67,7 +67,7 @@ def propagate_state(t_start: float, t_end: float, state: list, dt: float =.05) -
 
 if __name__ == "__main__":
 	x = np.array([0, 1, .4, 0])
-	x, xt, tt = propagate_point(0, 6, x)
+	x, xt, tt = propagate_state(0, 6, x)
 
 	plt.plot(xt[:,0], xt[:,1])
 	plt.axhline(y=0, color='r', linestyle='-')
