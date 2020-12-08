@@ -12,80 +12,102 @@ from numpy.random import multivariate_normal, rand
 # Specify init position and velocities for all balls
 # Calculate final error, with verbose options
 
-
-N_PARTICLES = 1000
+N_PARTICLES = 100
 
 class Ball:
-	def __init__(self, init_state: list, init_time: float, R: list):
-		self.state = init_state
-		self.t = init_time
-		self.state_traj = [init_state]
-		self.state_time = [init_time]
-		self.R = R
-		self.invR = np.linalg.inv(R)
+	def __init__(self, state: list, R: list, color: str):
+		self.state = state
+		# This is the ground truth simulation for a ball
+		self.init_simulation()
+		# I suppose every ball gets a filter, luxurious!
+		# Note: I don't think this is what they do in the paper, but it's too late to figure out atm
+		self.init_filter(R)
 
+		self.color = color
+		self.errs = None
+
+	def init_simulation(self):
+		self.state_traj = None
+		self.time_traj = None
+		self.t = 0
+
+	def init_filter(self, R):
+		self.invR = np.linalg.inv(R)
+		z0 = multivariate_normal(self.state[:2], R)
+		xh0 = np.array([*z0, 1, 0])
+		P0 = block_diag(R, 2**2 * np.eye(2))
+		self.particles = multivariate_normal(xh0, P0, size=N_PARTICLES)
+		self.weights = 1/N_PARTICLES * np.ones((N_PARTICLES,))
+		self.state_estimate = np.average(self.particles, axis=0, weights=self.weights)
 
 	def propagate_simulation(self, next_t: float):
-		self.state, *_ = propagate_state(self.t, next_t, self.state)
-		self.state_traj.append(self.state)
+		self.state, st, tt = propagate_state(self.t, next_t, self.state)
+		self.state_traj = np.vstack((self.state_traj, st[1:,:])) if self.state_traj is not None else st
+		self.time_traj = np.concatenate((self.time_traj, tt[1:])) if self.time_traj is not None else tt
+		self.old_t = self.t
 		self.t = next_t
-		self.state_time.append(next_t)
 
+	def apply_filter(self, zk):
+		self.state_estimate, self.particles, self.weights = filter_for_one(self.old_t,\
+																			self.t,\
+																			self.particles,\
+																			self.weights,\
+																			zk,\
+																			self.invR)
+		err = self.state - self.state_estimate
+		self.errs = np.vstack((self.errs, err)) if self.errs is not None else err
 
-	def propagate_estimation(self, next_t: float):
-		x_hat, X, w = filter_for_one(self.t, next_t, X, w, zk, self.invR)
+def init_ball(x, R, color):
+	x = np.array(x)
+	return Ball(x, R, color)
 
-# TODO
-def init_estimate(x, R):
-	pass
+def plot_error(ball):
+	plt.plot(ball.errs[:,0], label="X err")
+	plt.plot(ball.errs[:,1], label="Y err")
+	plt.plot(ball.errs[:,2], label="vx err")
+	plt.plot(ball.errs[:,3], label="vy err")
+	plt.grid()
+	plt.legend()
 
 def main():
 	R = 0.15**2 * np.eye(2)
+	# Base colors available: gbcmyk
+	balls = [init_ball([0, 3, 2, -6], R, 'g'),
+			init_ball([10, 5, -1, -1], R, 'b')]
 	
-	x1_init = np.array([0, 3, 2, -6])
-	x2_init = np.array([10, 5, -1, -1])
-	
-	x1_init_estimate = 
-	b1 = Ball(x1_init, 0, R)
-	b2 = Ball(x2_init, 0, R)
 	dt = .1
-	# Loop for 10 secs
 
 	plt.xlabel("X [m]")
 	plt.ylabel("Y [m]")
 	ax = plt.gca()
 	ax.set_xlim(-1, 11)
 	ax.set_ylim(0, 5)
-	plt.legend()
 	plt.grid()
 	
-	
-	ball_list = [b1, b2]
+	# Loop for 10 secs
 	for t in np.arange(0, 10, dt):
-		for ball in ball_list:
-			# x_hat, X, w = filter_for_one(t, t+dt, X, w, zk, prop_f, measurement_f, obs_error_p)
-			# errs.append(xk - x_hat)
-			# # A posteriori
-			# plt.scatter(X[:,0], X[:,1], marker=".", c='r', label="Particle")
-			# plt.scatter(zk[0], zk[1], c='y', label="Measurement")
-			# plt.scatter(x_hat[0], x_hat[1], c='m', label="Approximation")
-			plt.scatter(ball.state[0], ball.state[1], c='g', label="Ground truth")
-			plt.pause(0.01)
+		for i, ball in enumerate(balls):
+			ball_no = i + 1
 			# Ground truth
 			ball.propagate_simulation(t+dt)
-			# zk = multivariate_normal(xk[:2], R)
-			# plt.plot(state_traj[:,0], state_traj[:,1], c='g')
 
-	# err = np.array(errs)
-	# plt.plot(err[:,0], label="X err")
-	# plt.plot(err[:,1], label="Y err")
-	# plt.plot(err[:,2], label="vx err")
-	# plt.plot(err[:,3], label="vy err")
-	# plt.grid()
-	# plt.legend()
-	# plt.show()
-	B = np.array(ball.state_traj)
-	plt.scatter(B[:,0], B[:,1])
+			# Filter
+			zk = multivariate_normal(ball.state[:2], R)
+			ball.apply_filter(zk)
+
+			plt.scatter(ball.state[0], ball.state[1], marker=".", c=ball.color, label=f"G.T. Ball #{ball_no}")
+			plt.scatter(ball.state_estimate[0], ball.state_estimate[1], c='k', marker="*", label=f"Approx. Ball #{ball_no}")
+			plt.pause(dt/10)
+
+	for ball in balls:
+		traj = np.array(ball.state_traj)
+		plt.plot(traj[:,0], traj[:,1], c=ball.color)
+
+	for i, ball in enumerate(balls):
+		plt.figure(i + 2)
+		plot_error(ball)
+		plt.title(f"Error for ball #{i + 1}")
+
 	plt.show()
 
 

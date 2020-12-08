@@ -19,7 +19,7 @@ def obs_error_p(dz, invR):
 	# Gaussian error which will be normalized away with the particles later
 	return np.exp(-.5 * dz.T @ invR  @ dz)
 
-def filter_for_one(t_before, t_k, X_before, w_before, z_k, h, invR):
+def filter_for_one(t_before, t_k, X_before, w_before, z_k, invR):
 	"""
 	*_before: values for * at k-1
 	t_k: time for current measurement
