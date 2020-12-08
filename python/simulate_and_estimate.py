@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 from filter_one import filter_for_one
 from propagate_state import propagate_state
 import numpy as np
@@ -15,7 +16,6 @@ from numpy.random import multivariate_normal, rand
 N_PARTICLES = 1000
 
 class Ball:
-	
 	def __init__(self, init_state: list, init_time: float, R: list):
 		self.state = init_state
 		self.t = init_time

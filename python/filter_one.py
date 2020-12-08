@@ -6,30 +6,7 @@ from scipy.linalg import block_diag
 import matplotlib.pyplot as plt
 from numpy.random import multivariate_normal, rand
 
-
 np.random.seed(69)
-# Set up initial state and measurement with noise
-x0 = np.array([0, 3, 2, -6])
-R = 0.15**2 * np.eye(2)
-z0 = multivariate_normal(x0[:2], R)
-
-# For the filter
-invR = np.linalg.inv(R)
-
-
-# Initial state estimate
-xh0 = np.array([*z0, 1, 0])
-P0 = block_diag(R, 2**2 * np.eye(2))
-nX = 1000 # Number of particles
-X = multivariate_normal(xh0, P0, size=nX)
-w = 1/nX * np.ones((nX,))
-
-
-# Get for each ball
-#X = np.apply_along_axis(lambda x: propagate_state(0, tk, x)[0], axis=1, arr=X)
-
-#plt.scatter(X[:,0], X[:,1], marker=".", c='b', label="Propagated Particle")
-#plt.show()
 
 def prop_f(t_start, t_end, state):
 	x, *_ = propagate_state(t_start, t_end, state)
@@ -39,10 +16,9 @@ def measurement_f(x):
 	return x[:2]
 
 def obs_error_p(dz, invR):
-	# Gaussian error which will be normalized later
+	# Gaussian error which will be normalized away with the particles later
 	return np.exp(-.5 * dz.T @ invR  @ dz)
 
-# particle filter
 def filter_for_one(t_before, t_k, X_before, w_before, z_k, h, invR):
 	"""
 	*_before: values for * at k-1
@@ -76,9 +52,7 @@ def filter_for_one(t_before, t_k, X_before, w_before, z_k, h, invR):
 		w_new[i] = w_before[i] * obs_error_p(z_k - Z_new[i, :], invR)
 	w_new /= w_new.sum()
 
-	#x_hat = np.average(X_new, axis=0, weights=w_new)
-
-	# Systematic resampling, because superior
+	# Systematic resampling, because it's superior
 	cdf = np.cumsum(w_new)
 	n_draws = N
 	ind = np.zeros(n_draws, dtype=int)
@@ -93,25 +67,37 @@ def filter_for_one(t_before, t_k, X_before, w_before, z_k, h, invR):
 	X_new = X_new[ind]
 	w_new = np.repeat(1/N, N)
 
-	# Perturb the new particles a little, i should probably not do this with P0 but rather with something correlated with the measurement
-	# Yes, just use the sample covariance
-	# This does not work, idk why, it should!
-	# P = 1 / (N - 1) * (X_new - X_new.mean()).T @ (X_new - X_new.mean())
-
-	P = np.cov(X_new.T) #returnows are variables and cols are observations
+	# Use sample covariance to perturb the particles
+	P = np.cov(X_new.T) #rows are variables and cols are observations in np.cov
 
 	X_new = np.apply_along_axis(lambda r: multivariate_normal(mean=r, cov=tune * P), axis=1, arr=X_new)
 
-	x_hat = X_new.mean(axis=0)
+	x_hat = np.average(X_new, axis=0, weights=w_new)
 	
 	return x_hat, X_new, w_new
 
 
 if __name__ == "__main__":
+	# Set up initial state and measurement with noise
+	x0 = np.array([0, 3, 2, -6])
+	R = 0.15**2 * np.eye(2)
+	z0 = multivariate_normal(x0[:2], R)
+
+	# For the filter
+	invR = np.linalg.inv(R)
+
+	# Initial state estimate
+	xh0 = np.array([*z0, 1, 0])
+	P0 = block_diag(R, 2**2 * np.eye(2))
+	nX = 1000 # Number of particles
+	X = multivariate_normal(xh0, P0, size=nX)
+	w = 1/nX * np.ones((nX,))
+
 	xk = x0
 	zk = z0
 	errs = []
 	dt = .1
+
 	# Loop for 10 secs
 	for t in np.arange(0, 10, dt):
 		plt.xlabel("X [m]")
