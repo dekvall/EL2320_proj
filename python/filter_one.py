@@ -106,7 +106,7 @@ if __name__ == "__main__":
 		ax.set_xlim(-1, 11)
 		ax.set_ylim(0, 5)
 
-		x_hat, X, w = filter_for_one(t, t+dt, X, w, zk, measurement_f, invR)
+		x_hat, X, w = filter_for_one(t, t+dt, X, w, zk, invR)
 		errs.append(xk - x_hat)
 		# A posteriori
 		plt.scatter(X[:,0], X[:,1], marker=".", c='r', label="Particle")
