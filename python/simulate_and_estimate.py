@@ -6,7 +6,7 @@ import numpy as np
 from scipy.linalg import block_diag
 import matplotlib.pyplot as plt
 from numpy.random import multivariate_normal, rand
-
+import sys
 
 # Main loop for all balls
 # Specify init position and velocities for all balls
@@ -69,21 +69,21 @@ def plot_error(ball):
 	plt.grid()
 	plt.legend()
 
-def main():
+def main(verbose):
 	R = 0.15**2 * np.eye(2)
 	# Base colors available: gbcmyk
 	balls = [init_ball([0, 3, 2, -6], R, 'g'),
 			init_ball([10, 5, -1, -1], R, 'b')]
 	
 	dt = .1
-
-	plt.xlabel("X [m]")
-	plt.ylabel("Y [m]")
-	ax = plt.gca()
-	ax.set_xlim(-1, 11)
-	ax.set_ylim(0, 5)
-	plt.grid()
-	
+	if verbose > 1:
+		plt.xlabel("X [m]")
+		plt.ylabel("Y [m]")
+		ax = plt.gca()
+		ax.set_xlim(-1, 11)
+		ax.set_ylim(0, 5)
+		plt.grid()
+		
 	# Loop for 10 secs
 	for t in np.arange(0, 10, dt):
 		for i, ball in enumerate(balls):
@@ -94,22 +94,34 @@ def main():
 			# Filter
 			zk = multivariate_normal(ball.state[:2], R)
 			ball.apply_filter(zk)
+			if verbose > 1:
+				plt.scatter(ball.state[0], ball.state[1], marker=".", c=ball.color, label=f"G.T. Ball #{ball_no}")
+				plt.scatter(ball.state_estimate[0], ball.state_estimate[1], c='k', marker="*", label=f"Approx. Ball #{ball_no}")
+				plt.pause(dt/10)
 
-			plt.scatter(ball.state[0], ball.state[1], marker=".", c=ball.color, label=f"G.T. Ball #{ball_no}")
-			plt.scatter(ball.state_estimate[0], ball.state_estimate[1], c='k', marker="*", label=f"Approx. Ball #{ball_no}")
-			plt.pause(dt/10)
+	if verbose > 0:
+		for ball in balls:
+			traj = np.array(ball.state_traj)
+			plt.plot(traj[:,0], traj[:,1], c=ball.color)
 
-	for ball in balls:
-		traj = np.array(ball.state_traj)
-		plt.plot(traj[:,0], traj[:,1], c=ball.color)
+		for i, ball in enumerate(balls):
+			plt.figure(i + 2)
+			plot_error(ball)
+			plt.title(f"Error for ball #{i + 1}")
+		plt.show()
 
 	for i, ball in enumerate(balls):
-		plt.figure(i + 2)
-		plot_error(ball)
-		plt.title(f"Error for ball #{i + 1}")
-
-	plt.show()
-
+		x_err, y_err, vx_err, vy_err = np.sum(ball.errs,0)/N_PARTICLES
+		x_var, y_var, vx_var, vy_var = np.var(ball.errs, axis=0)
+		print("x: mean error: ", x_err, ", variance: ", x_var)
+		print("y mean error: ", y_err, ", variance: ", y_var)
+		print("vx mean error: ", vx_err, ", variance: ", vx_var)
+		print("vy mean error", vy_err, ", variance: ", vy_var, "\n")
 
 if __name__ == "__main__":
-	main()
+	if len(sys.argv) == 2:
+		verbose_option = int(sys.argv[1])
+	else: 
+		verbose_option = 3
+
+	main(verbose_option)
