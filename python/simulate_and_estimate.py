@@ -15,7 +15,7 @@ import sys
 N_PARTICLES = 100
 
 class Ball:
-	def __init__(self, state: list, R: list, color: str):
+	def __init__(self, state: list, R: list, P: list, color: str):
 		self.state = state
 		# This is the ground truth simulation for a ball
 		self.init_simulation()
@@ -23,6 +23,8 @@ class Ball:
 		# Note: I don't think this is what they do in the paper, but it's too late to figure out atm
 		self.init_filter(R)
 
+		#Process noise of each simulation
+		self.P = P
 		self.color = color
 		self.errs = None
 
@@ -53,13 +55,17 @@ class Ball:
 																			self.particles,\
 																			self.weights,\
 																			zk,\
-																			self.invR)
+																			self.invR, \
+																			self.P)
 		err = self.state - self.state_estimate
 		self.errs = np.vstack((self.errs, err)) if self.errs is not None else err
 
-def init_ball(x, R, color):
+
+
+
+def init_ball(x, R, P, color):
 	x = np.array(x)
-	return Ball(x, R, color)
+	return Ball(x, R, P, color)
 
 def plot_error(ball):
 	plt.plot(ball.errs[:,0], label="X err")
@@ -71,9 +77,10 @@ def plot_error(ball):
 
 def main(verbose):
 	R = 0.15**2 * np.eye(2)
+	P = 0.1 ** 2 * np.eye(4) #Try with different covariances for velocities?
 	# Base colors available: gbcmyk
-	balls = [init_ball([0, 3, 2, -6], R, 'g'),
-			init_ball([10, 5, -1, -1], R, 'b')]
+	balls = [init_ball([0, 3, 2, -6], R, P, 'g'),
+			init_ball([10, 5, -1, -1], R, P, 'b')]
 	
 	dt = .1
 	if verbose > 1:
@@ -99,6 +106,7 @@ def main(verbose):
 				plt.scatter(ball.state_estimate[0], ball.state_estimate[1], c='k', marker="*", label=f"Approx. Ball #{ball_no}")
 				plt.pause(dt/10)
 
+				
 	if verbose > 0:
 		for ball in balls:
 			traj = np.array(ball.state_traj)
