@@ -19,7 +19,7 @@ def obs_error_p(dz, invR):
 	# Gaussian error which will be normalized away with the particles later
 	return np.exp(-.5 * dz.T @ invR  @ dz)
 
-def filter_for_one(t_before, t_k, X_before, w_before, z_k, invR):
+def filter_for_one(t_before, t_k, X_before, w_before, z_k, invR, P):
 	"""
 	*_before: values for * at k-1
 	t_k: time for current measurement
@@ -41,14 +41,13 @@ def filter_for_one(t_before, t_k, X_before, w_before, z_k, invR):
 	# The particles spread out less
 	tune = (4/(N * (nx + 2)))**(1/(nx + 4));
 
-
 	X_new = np.zeros((N, nx))
 	Z_new = np.zeros((N, nz))
 	w_new = np.zeros((N,))
-
 	for i in range(N):
 		X_new[i, :] = prop_f(t_before, t_k, X_before[i, :])
 		Z_new[i, :] = measurement_f(X_new[i, :])
+		X_new[i, :] += multivariate_normal(np.array([0, 0, 0, 0]), P)
 		w_new[i] = w_before[i] * obs_error_p(z_k - Z_new[i, :], invR)
 	w_new /= w_new.sum()
 
@@ -70,7 +69,7 @@ def filter_for_one(t_before, t_k, X_before, w_before, z_k, invR):
 	# Use sample covariance to perturb the particles
 	P = np.cov(X_new.T) #rows are variables and cols are observations in np.cov
 
-	X_new = np.apply_along_axis(lambda r: multivariate_normal(mean=r, cov=tune * P), axis=1, arr=X_new)
+#	X_new = np.apply_along_axis(lambda r: multivariate_normal(mean=r, cov=tune * P), axis=1, arr=X_new)
 
 	x_hat = np.average(X_new, axis=0, weights=w_new)
 	

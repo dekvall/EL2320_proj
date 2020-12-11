@@ -77,12 +77,13 @@ def plot_error(ball):
 
 def main(verbose):
 	R = 0.15**2 * np.eye(2)
-	P = 0.1 ** 2 * np.eye(4) #Try with different covariances for velocities?
+	P = 0.3 **2 * np.eye(4) #Try with different covariances for velocities?
 	# Base colors available: gbcmyk
 	balls = [init_ball([0, 3, 2, -6], R, P, 'g'),
 			init_ball([10, 5, -1, -1], R, P, 'b')]
 	
-	dt = .1
+	dt = .05
+	simulation_time = 5
 	if verbose > 1:
 		plt.xlabel("X [m]")
 		plt.ylabel("Y [m]")
@@ -92,7 +93,7 @@ def main(verbose):
 		plt.grid()
 		
 	# Loop for 10 secs
-	for t in np.arange(0, 10, dt):
+	for t in np.arange(0, simulation_time, dt):
 		for i, ball in enumerate(balls):
 			ball_no = i + 1
 			# Ground truth
