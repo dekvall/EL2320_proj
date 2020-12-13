@@ -58,8 +58,8 @@ def filter_for_one(t_before, t_k, X_before, w_before, z_k, invR, P):
 	w_new = np.zeros((N,))
 	for i in range(N):
 		X_new[i, :] = prop_f(t_before, t_k, X_before[i, :])
-		Z_new[i, :] = measurement_f(X_new[i, :])
 		X_new[i, :] += multivariate_normal(np.array([0, 0, 0, 0]), P)
+		Z_new[i, :] = measurement_f(X_new[i, :])
 		w_new[i] = w_before[i] * obs_error_p(z_k - Z_new[i, :], invR)
 	w_new /= w_new.sum()
 

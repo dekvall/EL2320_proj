@@ -7,6 +7,7 @@ from scipy.linalg import block_diag
 import matplotlib.pyplot as plt
 from numpy.random import multivariate_normal, rand
 import sys
+import math
 
 # Main loop for all balls
 # Specify init position and velocities for all balls
@@ -76,11 +77,11 @@ def plot_error(ball):
 	plt.legend()
 
 def main(verbose):
-	R = 0.15**2 * np.eye(2)
-	P = 0.3 **2 * np.eye(4) #Try with different covariances for velocities?
+	R = 0.1**2 * np.eye(2)
+	P = 0.1 **2 * np.eye(4) #Try with different covariances for velocities?
 	# Base colors available: gbcmyk
-	balls = [init_ball([0, 3, 2, -6], R, P, 'g'),
-			init_ball([10, 5, -1, -1], R, P, 'b')]
+	balls = [init_ball([0, 3, 2, -6], R, P, 'g')]
+#			init_ball([10, 5, -1, -1], R, P, 'b')]
 	
 	dt = .05
 	simulation_time = 5
@@ -120,7 +121,7 @@ def main(verbose):
 		plt.show()
 
 	for i, ball in enumerate(balls):
-		x_err, y_err, vx_err, vy_err = np.sum(ball.errs,0)/N_PARTICLES
+		x_err, y_err, vx_err, vy_err = np.mean(np.absolute(ball.errs),axis=0)
 		x_var, y_var, vx_var, vy_var = np.var(ball.errs, axis=0)
 		print("x: mean error: ", x_err, ", variance: ", x_var)
 		print("y mean error: ", y_err, ", variance: ", y_var)
