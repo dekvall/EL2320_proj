@@ -19,6 +19,18 @@ def obs_error_p(dz, invR):
 	# Gaussian error which will be normalized away with the particles later
 	return np.exp(-.5 * dz.T @ invR  @ dz)
 
+def systematic_resampling(weights, n_draws):
+	cdf = np.cumsum(weights)
+	particle_ind = np.zeros(n_draws, dtype=int)
+	draws = np.sort(rand(n_draws))
+
+	ci = 0
+	for di in range(n_draws):
+		while cdf[ci] < draws[di] and ci < n_draws:
+			ci += 1
+		particle_ind[di] = ci
+	return particle_ind
+
 def filter_for_one(t_before, t_k, X_before, w_before, z_k, invR, P):
 	"""
 	*_before: values for * at k-1
@@ -51,24 +63,14 @@ def filter_for_one(t_before, t_k, X_before, w_before, z_k, invR, P):
 		w_new[i] = w_before[i] * obs_error_p(z_k - Z_new[i, :], invR)
 	w_new /= w_new.sum()
 
-	# Systematic resampling, because it's superior
-	cdf = np.cumsum(w_new)
-	n_draws = N
-	ind = np.zeros(n_draws, dtype=int)
-	draws = np.sort(rand(n_draws))
-
-	ci = 0
-	for di in range(n_draws):
-		while cdf[ci] < draws[di] and ci < N:
-			ci += 1
-		ind[di] = ci
-
+	ind = systematic_resampling(w_new, N)
 	X_new = X_new[ind]
 	w_new = np.repeat(1/N, N)
 
 	# Use sample covariance to perturb the particles
 	P = np.cov(X_new.T) #rows are variables and cols are observations in np.cov
 
+#   This should be the same as the propagation in the loop above, except for the addition of tune
 #	X_new = np.apply_along_axis(lambda r: multivariate_normal(mean=r, cov=tune * P), axis=1, arr=X_new)
 
 	x_hat = np.average(X_new, axis=0, weights=w_new)
@@ -80,6 +82,7 @@ if __name__ == "__main__":
 	# Set up initial state and measurement with noise
 	x0 = np.array([0, 3, 2, -6])
 	R = 0.15**2 * np.eye(2)
+	P = 0.3**2 * np.eye(4)
 	z0 = multivariate_normal(x0[:2], R)
 
 	# For the filter
@@ -105,7 +108,7 @@ if __name__ == "__main__":
 		ax.set_xlim(-1, 11)
 		ax.set_ylim(0, 5)
 
-		x_hat, X, w = filter_for_one(t, t+dt, X, w, zk, invR)
+		x_hat, X, w = filter_for_one(t, t+dt, X, w, zk, invR, P)
 		errs.append(xk - x_hat)
 		# A posteriori
 		plt.scatter(X[:,0], X[:,1], marker=".", c='r', label="Particle")
