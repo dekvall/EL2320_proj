@@ -4,7 +4,7 @@ from propagate_state import propagate_state
 import numpy as np
 from scipy.linalg import block_diag
 import matplotlib.pyplot as plt
-from numpy.random import multivariate_normal, rand
+from numpy.random import multivariate_normal, rand, randint
 
 np.random.seed(69)
 
@@ -33,6 +33,28 @@ def systematic_resampling(weights, n_draws):
 			ci += 1
 		particle_ind[di] = ci
 	return particle_ind
+
+def add_random_sample(X, n_particles, sample_prob, x_low, x_high, y_low, y_high):
+	"""
+	Randomly resamples particles from an array of particles
+
+	Input:
+		X [np.array]: Particles
+		n_particles [int]: Number of particles to be randomly sampled
+		sample_prob [float 0-1]: Probability of resample
+		x_low [float]: Lower boundary of x
+		x_high [float]: Upper boundary of x
+		y_low [float]: Lower boundary of y
+		y_high [float]: Upper boundary of y
+	
+	Return:
+		X [np.array]: New Particles
+	"""
+	N, nx = X.shape
+	if sample_prob >= np.random.random():
+
+		print(X[np.random.randint(0, N-1)])
+
 
 def filter_for_one(t_before, t_k, X_before, w_before, z_k, invR, P):
 	"""
@@ -88,7 +110,7 @@ if __name__ == "__main__":
 	# Set up initial state and measurement with noise
 	x0 = np.array([0, 3, 2, -6])
 	R = 0.15**2 * np.eye(2)
-	P = 3**2 * np.eye(4)
+	P = 0.1**2 * np.eye(4)
 	z0 = multivariate_normal(x0[:2], R)
 
 	# For the filter
@@ -103,37 +125,45 @@ if __name__ == "__main__":
 	#X = multivariate_normal(xh0, P0, size=nX)
 
 	# Start tracking uniformly
+	x_low = -1.
+	x_high = 11.
+	y_low = 0.
+	y_high = 5.
+	v_x = 4
+	v_y = 4
 	X = np.hstack((
-		np.random.uniform(-1, 11, (nX, 1)),
-		np.random.uniform(-1, 11, (nX, 1)), 
-		np.random.uniform(-10, 10, (nX, 1)),
-		np.random.uniform(-5, 5, (nX, 1))
+		np.random.uniform(x_low, x_high, (nX, 1)),
+		np.random.uniform(y_low, y_high, (nX, 1)), 
+		np.random.uniform(-v_x, v_x, (nX, 1)),
+		np.random.uniform(-v_y, v_y, (nX, 1))
 		))
 	w = np.repeat(1/nX, nX)
-
+	X1 = X
 	xk = x0
 	zk = z0
 	errs = []
 	dt = .1
+
+	add_random_sample(X, 3, 0.8, x_low, x_high, y_low, y_high)
 
 	# Loop for 10 secs
 	for t in np.arange(0, 10, dt):
 		plt.xlabel("X [m]")
 		plt.ylabel("Y [m]")
 		ax = plt.gca()
-		ax.set_xlim(-1, 11)
-		ax.set_ylim(0, 5)
+		ax.set_xlim(x_low, x_high)
+		ax.set_ylim(y_low, y_high)
 
 		x_hat, X, w = filter_for_one(t, t+dt, X, w, zk, R, P)
 		errs.append(xk - x_hat)
 		# A posteriori
-		plt.scatter(X[:,0], X[:,1], marker=".", c='r', label="Particle")
+		plt.scatter(X1[:,0], X1[:,1], marker=".", c='r', label="Particle")
 		plt.scatter(zk[0], zk[1], c='y', label="Measurement")
 		plt.scatter(x_hat[0], x_hat[1], c='m', label="Approximation")
 		plt.scatter(xk[0], xk[1], c='g', label="Ground truth")
 		plt.legend()
 		plt.grid()
-		plt.pause(dt)
+		plt.pause(dt/100)
 		plt.clf()
 		# Ground truth
 		xk, state_traj, *_ = propagate_state(t, t+dt, xk)
