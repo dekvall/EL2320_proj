@@ -13,7 +13,7 @@ import math
 # Specify init position and velocities for all balls
 # Calculate final error, with verbose options
 
-N_PARTICLES = 100
+N_PARTICLES = 1000
 
 class Ball:
 	def __init__(self, state: list, R: list, P: list, color: str):

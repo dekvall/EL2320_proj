@@ -15,9 +15,12 @@ def prop_f(t_start, t_end, state):
 def measurement_f(x):
 	return x[:2]
 
-def obs_error_p(dz, invR):
+def obs_error_p(dz, R):
 	# Gaussian error which will be normalized away with the particles later
-	return np.exp(-.5 * dz.T @ invR  @ dz)
+	invR = np.linalg.inv(R)
+	detR = np.linalg.det(R)
+	d = len(dz)
+	return 1 / (np.power(2*np.pi, d/2) * np.sqrt(detR)) * np.exp(-.5 * dz.T @ invR  @ dz)
 
 def systematic_resampling(weights, n_draws):
 	cdf = np.cumsum(weights)
@@ -26,7 +29,7 @@ def systematic_resampling(weights, n_draws):
 
 	ci = 0
 	for di in range(n_draws):
-		while cdf[ci] < draws[di] and ci < n_draws:
+		while ci < n_draws and cdf[ci] < draws[di]:
 			ci += 1
 		particle_ind[di] = ci
 	return particle_ind
@@ -44,6 +47,7 @@ def filter_for_one(t_before, t_k, X_before, w_before, z_k, invR, P):
 	X_k: particle set for k
 	w_k: particle weights for k
 	"""
+	eps = np.spacing(1)
 
 	N, nx = X_before.shape
 	nz, = z_k.shape
@@ -60,8 +64,10 @@ def filter_for_one(t_before, t_k, X_before, w_before, z_k, invR, P):
 		X_new[i, :] = prop_f(t_before, t_k, X_before[i, :])
 		X_new[i, :] += multivariate_normal(np.array([0, 0, 0, 0]), P)
 		Z_new[i, :] = measurement_f(X_new[i, :])
-		w_new[i] = w_before[i] * obs_error_p(z_k - Z_new[i, :], invR)
+		w_new[i] = w_before[i] * obs_error_p(z_k - Z_new[i, :], R)
+	print(f"before: {w_new.sum()}", {eps})
 	w_new /= w_new.sum()
+	print(f"after {w_new.sum()}")
 
 	ind = systematic_resampling(w_new, N)
 	X_new = X_new[ind]
@@ -82,18 +88,28 @@ if __name__ == "__main__":
 	# Set up initial state and measurement with noise
 	x0 = np.array([0, 3, 2, -6])
 	R = 0.15**2 * np.eye(2)
-	P = 0.3**2 * np.eye(4)
+	P = 3**2 * np.eye(4)
 	z0 = multivariate_normal(x0[:2], R)
 
 	# For the filter
-	invR = np.linalg.inv(R)
+	# invR = np.linalg.inv(R)
 
 	# Initial state estimate
 	xh0 = np.array([*z0, 1, 0])
-	P0 = block_diag(R, 2**2 * np.eye(2))
 	nX = 1000 # Number of particles
-	X = multivariate_normal(xh0, P0, size=nX)
-	w = 1/nX * np.ones((nX,))
+
+	# Track around initial measurement
+	#P0 = block_diag(R, 2**2 * np.eye(2))
+	#X = multivariate_normal(xh0, P0, size=nX)
+
+	# Start tracking uniformly
+	X = np.hstack((
+		np.random.uniform(-1, 11, (nX, 1)),
+		np.random.uniform(-1, 11, (nX, 1)), 
+		np.random.uniform(-10, 10, (nX, 1)),
+		np.random.uniform(-5, 5, (nX, 1))
+		))
+	w = np.repeat(1/nX, nX)
 
 	xk = x0
 	zk = z0
@@ -108,7 +124,7 @@ if __name__ == "__main__":
 		ax.set_xlim(-1, 11)
 		ax.set_ylim(0, 5)
 
-		x_hat, X, w = filter_for_one(t, t+dt, X, w, zk, invR, P)
+		x_hat, X, w = filter_for_one(t, t+dt, X, w, zk, R, P)
 		errs.append(xk - x_hat)
 		# A posteriori
 		plt.scatter(X[:,0], X[:,1], marker=".", c='r', label="Particle")
@@ -121,7 +137,7 @@ if __name__ == "__main__":
 		plt.clf()
 		# Ground truth
 		xk, state_traj, *_ = propagate_state(t, t+dt, xk)
-		zk = multivariate_normal(xk[:2], R)
+		zk = multivariate_normal(xk[:2], 0.01*R)
 		plt.plot(state_traj[:,0], state_traj[:,1], c='g')
 
 	err = np.array(errs)
