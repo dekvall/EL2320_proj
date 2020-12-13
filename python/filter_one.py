@@ -22,6 +22,14 @@ def obs_error_p(dz, R):
 	d = len(dz)
 	return 1 / (np.power(2*np.pi, d/2) * np.sqrt(detR)) * np.exp(-.5 * dz.T @ invR  @ dz)
 
+def uniform_init():
+	return np.hstack((
+		np.random.uniform(-1, 11, (nX, 1)),
+		np.random.uniform(-1, 11, (nX, 1)), 
+		np.random.uniform(-10, 10, (nX, 1)),
+		np.random.uniform(-5, 5, (nX, 1))
+		))
+
 def systematic_resampling(weights, n_draws):
 	cdf = np.cumsum(weights)
 	particle_ind = np.zeros(n_draws, dtype=int)
@@ -53,7 +61,7 @@ def add_random_sample(X, n_particles, sample_prob, x_low, x_high, y_low, y_high)
 	N, nx = X.shape
 	if sample_prob >= np.random.random():
 
-		print(X[np.random.randint(0, N-1)])
+		X[np.random.randint(0, N-1)]
 
 
 def filter_for_one(t_before, t_k, X_before, w_before, z_k, invR, P):
@@ -87,9 +95,10 @@ def filter_for_one(t_before, t_k, X_before, w_before, z_k, invR, P):
 		X_new[i, :] += multivariate_normal(np.array([0, 0, 0, 0]), P)
 		Z_new[i, :] = measurement_f(X_new[i, :])
 		w_new[i] = w_before[i] * obs_error_p(z_k - Z_new[i, :], R)
-	print(f"before: {w_new.sum()}", {eps})
-	w_new /= w_new.sum()
-	print(f"after {w_new.sum()}")
+	if w_new.sum() < eps: # Particles too far
+		w_new = np.repeat(1/N, N)
+	else:
+		w_new /= w_new.sum()
 
 	ind = systematic_resampling(w_new, N)
 	X_new = X_new[ind]
@@ -121,8 +130,8 @@ if __name__ == "__main__":
 	nX = 1000 # Number of particles
 
 	# Track around initial measurement
-	#P0 = block_diag(R, 2**2 * np.eye(2))
-	#X = multivariate_normal(xh0, P0, size=nX)
+	# P0 = block_diag(R, 2**2 * np.eye(2))
+	# X = multivariate_normal(xh0, P0, size=nX)
 
 	# Start tracking uniformly
 	x_low = -1.
@@ -137,14 +146,15 @@ if __name__ == "__main__":
 		np.random.uniform(-v_x, v_x, (nX, 1)),
 		np.random.uniform(-v_y, v_y, (nX, 1))
 		))
+	# X = uniform_init()
 	w = np.repeat(1/nX, nX)
 	X1 = X
 	xk = x0
 	zk = z0
 	errs = []
-	dt = .1
+	dt = .05
 
-	add_random_sample(X, 3, 0.8, x_low, x_high, y_low, y_high)
+	# add_random_sample(X, 3, 0.8, x_low, x_high, y_low, y_high)
 
 	# Loop for 10 secs
 	for t in np.arange(0, 10, dt):
@@ -157,7 +167,7 @@ if __name__ == "__main__":
 		x_hat, X, w = filter_for_one(t, t+dt, X, w, zk, R, P)
 		errs.append(xk - x_hat)
 		# A posteriori
-		plt.scatter(X1[:,0], X1[:,1], marker=".", c='r', label="Particle")
+		plt.scatter(X[:,0], X[:,1], marker=".", c='r', alpha=.05, label="Particle")
 		plt.scatter(zk[0], zk[1], c='y', label="Measurement")
 		plt.scatter(x_hat[0], x_hat[1], c='m', label="Approximation")
 		plt.scatter(xk[0], xk[1], c='g', label="Ground truth")
