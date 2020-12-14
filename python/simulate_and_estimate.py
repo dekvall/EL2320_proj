@@ -62,8 +62,6 @@ class Ball:
 		self.errs = np.vstack((self.errs, err)) if self.errs is not None else err
 
 
-
-
 def init_ball(x, R, P, color):
 	x = np.array(x)
 	return Ball(x, R, P, color)
