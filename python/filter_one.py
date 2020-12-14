@@ -22,12 +22,12 @@ def obs_error_p(dz, R):
 	d = len(dz)
 	return 1 / (np.power(2*np.pi, d/2) * np.sqrt(detR)) * np.exp(-.5 * dz.T @ invR  @ dz)
 
-def uniform_init():
-	return np.hstack((
-		np.random.uniform(-1, 11, (nX, 1)),
-		np.random.uniform(-1, 11, (nX, 1)), 
-		np.random.uniform(-10, 10, (nX, 1)),
-		np.random.uniform(-5, 5, (nX, 1))
+def uniform_init(x_low, x_high, y_low, y_high, vx, vy):
+	return 	np.hstack((
+		np.random.uniform(x_low, x_high, (nX, 1)),
+		np.random.uniform(y_low, y_high, (nX, 1)), 
+		np.random.uniform(-v_x, v_x, (nX, 1)),
+		np.random.uniform(-v_y, v_y, (nX, 1))
 		))
 
 def systematic_resampling(weights, n_draws):
@@ -134,19 +134,8 @@ if __name__ == "__main__":
 	# X = multivariate_normal(xh0, P0, size=nX)
 
 	# Start tracking uniformly
-	x_low = -1.
-	x_high = 11.
-	y_low = 0.
-	y_high = 5.
-	v_x = 4
-	v_y = 4
-	X = np.hstack((
-		np.random.uniform(x_low, x_high, (nX, 1)),
-		np.random.uniform(y_low, y_high, (nX, 1)), 
-		np.random.uniform(-v_x, v_x, (nX, 1)),
-		np.random.uniform(-v_y, v_y, (nX, 1))
-		))
-	# X = uniform_init()
+	X = uniform_init(x_low=-1, x_high=11, y_low=0, y_high=5, vx=4, vy=4)
+
 	w = np.repeat(1/nX, nX)
 	X1 = X
 	xk = x0
