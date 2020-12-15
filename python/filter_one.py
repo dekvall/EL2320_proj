@@ -63,6 +63,10 @@ def add_random_sample(X, n_particles, sample_prob, x_low, x_high, y_low, y_high)
 
 		X[np.random.randint(0, N-1)]
 
+def apriori(t_before, t_k, state_before, P):
+	state = prop_f(t_before, t_k, state_before)
+	return multivariate_normal(state, P)
+
 
 def filter_for_one(t_before, t_k, X_before, w_before, z_k, R, P, beta=None):
 	"""
@@ -82,17 +86,11 @@ def filter_for_one(t_before, t_k, X_before, w_before, z_k, R, P, beta=None):
 	N, nx = X_before.shape
 	nz, = z_k.shape
 
-	# Not sure how well this works,
-	# but it's an optimal gaussian tuning parameter
-	# The particles spread out less
-	tune = (4/(N * (nx + 2)))**(1/(nx + 4));
-
 	X_new = np.zeros((N, nx))
 	Z_new = np.zeros((N, nz))
 	w_new = np.zeros((N,))
 	for i in range(N):
-		X_new[i, :] = prop_f(t_before, t_k, X_before[i, :])
-		X_new[i, :] += multivariate_normal(np.array([0, 0, 0, 0]), P)
+		X_new[i, :] = apriori(t_before, t_k, X_before[i, :], P)
 		Z_new[i, :] = measurement_f(X_new[i, :])
 		w_new[i] = w_before[i] * obs_error_p(z_k - Z_new[i, :], R)
 		if beta is not None:
