@@ -3,7 +3,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def propagate_state(t_start: float, t_end: float, state: list, dt: float =.02) -> list:
+def propagate_state(t_start: float, t_end: float, state: list, dt: float =.05) -> list:
 	"""
 	in:
 	t_start: Simulation start time

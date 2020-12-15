@@ -63,12 +63,17 @@ def add_random_sample(X, n_particles, sample_prob, x_low, x_high, y_low, y_high)
 
 		X[np.random.randint(0, N-1)]
 
+
 def apriori(t_before, t_k, state_before, P):
 	state = prop_f(t_before, t_k, state_before)
 	return multivariate_normal(state, P)
 
 
-def filter_for_one(t_before, t_k, X_before, w_before, z_k, R, P, beta=None):
+def aprori_all_particles(t_before, t_k, X, P):
+	return np.apply_along_axis(lambda r: apriori(t_before, t_k, r, P), axis=1, arr=X)
+
+
+def posteriori(t_before, t_k, X, w_before, z_k, R, P, beta=None):
 	"""
 	*_before: values for * at k-1
 	t_k: time for current measurement
@@ -83,15 +88,14 @@ def filter_for_one(t_before, t_k, X_before, w_before, z_k, R, P, beta=None):
 	"""
 	eps = np.spacing(1)
 
-	N, nx = X_before.shape
+	N, nx = X.shape
 	nz, = z_k.shape
 
-	X_new = np.zeros((N, nx))
+	# X = np.zeros((N, nx))
 	Z_new = np.zeros((N, nz))
 	w_new = np.zeros((N,))
 	for i in range(N):
-		X_new[i, :] = apriori(t_before, t_k, X_before[i, :], P)
-		Z_new[i, :] = measurement_f(X_new[i, :])
+		Z_new[i, :] = measurement_f(X[i, :])
 		w_new[i] = w_before[i] * obs_error_p(z_k - Z_new[i, :], R)
 		if beta is not None:
 			assert type(beta) is np.ndarray, "Beta must be an array"
@@ -103,18 +107,18 @@ def filter_for_one(t_before, t_k, X_before, w_before, z_k, R, P, beta=None):
 		w_new /= w_new.sum()
 
 	ind = systematic_resampling(w_new, N)
-	X_new = X_new[ind]
+	X = X[ind]
 	w_new = np.repeat(1/N, N)
 
 	# Use sample covariance to perturb the particles
-	P = np.cov(X_new.T) #rows are variables and cols are observations in np.cov
+	P = np.cov(X.T) #rows are variables and cols are observations in np.cov
 
 #   This should be the same as the propagation in the loop above, except for the addition of tune
-#	X_new = np.apply_along_axis(lambda r: multivariate_normal(mean=r, cov=tune * P), axis=1, arr=X_new)
+#	X = np.apply_along_axis(lambda r: multivariate_normal(mean=r, cov=tune * P), axis=1, arr=X)
 
-	x_hat = np.average(X_new, axis=0, weights=w_new)
+	x_hat = np.average(X, axis=0, weights=w_new)
 	
-	return x_hat, X_new, w_new
+	return x_hat, X, w_new
 
 
 if __name__ == "__main__":

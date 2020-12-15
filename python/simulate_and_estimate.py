@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from filter_one import filter_for_one, uniform_init, obs_error_p, apriori
+from filter_one import posteriori, uniform_init, obs_error_p, aprori_all_particles
 from propagate_state import propagate_state
 import numpy as np
 from scipy.linalg import block_diag
@@ -48,8 +48,8 @@ class Ball:
 		self.t = next_t
 
 
-	def apply_filter(self, zk, beta):
-		self.state_estimate, self.particles, self.weights = filter_for_one(self.old_t,\
+	def estimate(self, zk, beta):
+		self.state_estimate, self.particles, self.weights = posteriori(self.old_t,\
 																			self.t,\
 																			self.particles,\
 																			self.weights,\
@@ -61,19 +61,22 @@ class Ball:
 		self.errs = np.vstack((self.errs, err)) if self.errs is not None else err
 
 
+	def predict(self, dt):
+		self.particles = aprori_all_particles(self.t, self.t+dt, self.particles, self.P)
+
 def calc_beta(self, measuremets, balls):
 	"""
 	beta: sizeof(targets) x sizeof(measurements) 
 	"""
-	M = len(measurements)
-	T = len(balls)
-	P_D = .9
-	P_FA = .05
+	# M = len(measurements)
+	# T = len(balls)
+	# P_D = .9
+	# P_FA = .05
 
-	beta = np.zeros((T, M))
-	for i, m in enumerate(measurements):
-		for j, ball in enumerate(balls):
-			p = obs_error(m - ball.state_estimate[:2], ball.R)
+	# beta = np.zeros((T, M))
+	# for i, m in enumerate(measurements):
+	# 	for j, ball in enumerate(balls):
+	# 		p = obs_error(m - ball.state_estimate[:2], ball.R)
 
 
 
@@ -110,17 +113,21 @@ def main(verbose):
 		ax.set_ylim(0, 5)
 		plt.grid()
 		
+
 	# Loop for 10 secs
 	for t in np.arange(0, simulation_time, dt):
-		beta = calc_beta(measurements, balls)
+		# beta = calc_beta(measurements, balls)
 		for i, ball in enumerate(balls):
 			ball_no = i + 1
 			# Ground truth
 			ball.propagate_simulation(t+dt)
 
+			
 			# Filter
 			zk = multivariate_normal(ball.state[:2], R)
-			ball.apply_filter(zk, beta)
+			ball.estimate(zk, None)
+			ball.predict(dt)
+
 			if verbose > 1:
 				plt.scatter(ball.state[0], ball.state[1], marker=".", c=ball.color, label=f"G.T. Ball #{ball_no}")
 				plt.scatter(ball.state_estimate[0], ball.state_estimate[1], c='k', marker="*", label=f"Approx. Ball #{ball_no}")
