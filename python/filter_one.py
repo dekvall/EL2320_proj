@@ -22,12 +22,12 @@ def obs_error_p(dz, R):
 	d = len(dz)
 	return 1 / (np.power(2*np.pi, d/2) * np.sqrt(detR)) * np.exp(-.5 * dz.T @ invR  @ dz)
 
-def uniform_init(x_low, x_high, y_low, y_high, vx, vy):
+def uniform_init(x_low, x_high, y_low, y_high, v_x, v_y, n):
 	return 	np.hstack((
-		np.random.uniform(x_low, x_high, (nX, 1)),
-		np.random.uniform(y_low, y_high, (nX, 1)), 
-		np.random.uniform(-v_x, v_x, (nX, 1)),
-		np.random.uniform(-v_y, v_y, (nX, 1))
+		np.random.uniform(x_low, x_high, (n, 1)),
+		np.random.uniform(y_low, y_high, (n, 1)),
+		np.random.uniform(-v_x, v_x, (n, 1)),
+		np.random.uniform(-v_y, v_y, (n, 1))
 		))
 
 def systematic_resampling(weights, n_draws):
@@ -64,7 +64,7 @@ def add_random_sample(X, n_particles, sample_prob, x_low, x_high, y_low, y_high)
 		X[np.random.randint(0, N-1)]
 
 
-def filter_for_one(t_before, t_k, X_before, w_before, z_k, invR, P):
+def filter_for_one(t_before, t_k, X_before, w_before, z_k, R, P, beta=None):
 	"""
 	*_before: values for * at k-1
 	t_k: time for current measurement
@@ -95,7 +95,11 @@ def filter_for_one(t_before, t_k, X_before, w_before, z_k, invR, P):
 		X_new[i, :] += multivariate_normal(np.array([0, 0, 0, 0]), P)
 		Z_new[i, :] = measurement_f(X_new[i, :])
 		w_new[i] = w_before[i] * obs_error_p(z_k - Z_new[i, :], R)
-	if w_new.sum() < eps: # Particles too far
+		if beta is not None:
+			assert type(beta) is np.ndarray, "Beta must be an array"
+			w_new[i] = np.sum(beta * w_new[i])
+
+	if w_new.sum() < eps: # Avoid /0 errors when particles are too far away.
 		w_new = np.repeat(1/N, N)
 	else:
 		w_new /= w_new.sum()
@@ -134,7 +138,7 @@ if __name__ == "__main__":
 	# X = multivariate_normal(xh0, P0, size=nX)
 
 	# Start tracking uniformly
-	X = uniform_init(x_low=-1, x_high=11, y_low=0, y_high=5, vx=4, vy=4)
+	X = uniform_init(x_low=-1, x_high=11, y_low=0, y_high=5, v_x=4, v_y=4, n=nX)
 
 	w = np.repeat(1/nX, nX)
 	X1 = X

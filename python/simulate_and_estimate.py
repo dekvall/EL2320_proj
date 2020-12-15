@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from filter_one import filter_for_one
+from filter_one import filter_for_one, uniform_init
 from propagate_state import propagate_state
 import numpy as np
 from scipy.linalg import block_diag
@@ -35,12 +35,9 @@ class Ball:
 		self.t = 0
 
 	def init_filter(self, R):
-		self.invR = np.linalg.inv(R)
-		z0 = multivariate_normal(self.state[:2], R)
-		xh0 = np.array([*z0, 1, 0])
-		P0 = block_diag(R, 2**2 * np.eye(2))
-		self.particles = multivariate_normal(xh0, P0, size=N_PARTICLES)
-		self.weights = 1/N_PARTICLES * np.ones((N_PARTICLES,))
+		self.R = R
+		self.particles = uniform_init(x_low=-1, x_high=11, y_low=0, y_high=5, v_x=4, v_y=4, n=N_PARTICLES)
+		self.weights = np.repeat(1/N_PARTICLES, N_PARTICLES)
 		self.state_estimate = np.average(self.particles, axis=0, weights=self.weights)
 
 	def propagate_simulation(self, next_t: float):
@@ -56,7 +53,7 @@ class Ball:
 																			self.particles,\
 																			self.weights,\
 																			zk,\
-																			self.invR, \
+																			self.R, \
 																			self.P)
 		err = self.state - self.state_estimate
 		self.errs = np.vstack((self.errs, err)) if self.errs is not None else err
