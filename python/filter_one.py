@@ -73,7 +73,7 @@ def aprori_all_particles(t_before, t_k, X, P):
 	return np.apply_along_axis(lambda r: apriori(t_before, t_k, r, P), axis=1, arr=X)
 
 
-def posteriori(t_before, t_k, X, w_before, z_k, R, P, beta=None):
+def posteriori(X, w, z_k, R, beta=None):
 	"""
 	*_before: values for * at k-1
 	t_k: time for current measurement
@@ -91,24 +91,22 @@ def posteriori(t_before, t_k, X, w_before, z_k, R, P, beta=None):
 	N, nx = X.shape
 	nz, = z_k.shape
 
-	# X = np.zeros((N, nx))
-	Z_new = np.zeros((N, nz))
-	w_new = np.zeros((N,))
+	Z = np.zeros((N, nz))
 	for i in range(N):
-		Z_new[i, :] = measurement_f(X[i, :])
-		w_new[i] = w_before[i] * obs_error_p(z_k - Z_new[i, :], R)
+		Z[i, :] = measurement_f(X[i, :])
+		w[i] *= obs_error_p(z_k - Z[i, :], R)
 		if beta is not None:
 			assert type(beta) is np.ndarray, "Beta must be an array"
-			w_new[i] = np.sum(beta * w_new[i])
+			w[i] = np.sum(beta * w[i])
 
-	if w_new.sum() < eps: # Avoid /0 errors when particles are too far away.
-		w_new = np.repeat(1/N, N)
+	if w.sum() < eps: # Avoid /0 errors when particles are too far away.
+		w = np.repeat(1/N, N)
 	else:
-		w_new /= w_new.sum()
+		w /= w.sum()
 
-	ind = systematic_resampling(w_new, N)
+	ind = systematic_resampling(w, N)
 	X = X[ind]
-	w_new = np.repeat(1/N, N)
+	w = np.repeat(1/N, N)
 
 	# Use sample covariance to perturb the particles
 	P = np.cov(X.T) #rows are variables and cols are observations in np.cov
@@ -116,9 +114,9 @@ def posteriori(t_before, t_k, X, w_before, z_k, R, P, beta=None):
 #   This should be the same as the propagation in the loop above, except for the addition of tune
 #	X = np.apply_along_axis(lambda r: multivariate_normal(mean=r, cov=tune * P), axis=1, arr=X)
 
-	x_hat = np.average(X, axis=0, weights=w_new)
+	x_hat = np.average(X, axis=0, weights=w)
 	
-	return x_hat, X, w_new
+	return x_hat, X, w
 
 
 if __name__ == "__main__":
@@ -156,10 +154,9 @@ if __name__ == "__main__":
 		plt.xlabel("X [m]")
 		plt.ylabel("Y [m]")
 		ax = plt.gca()
-		ax.set_xlim(x_low, x_high)
-		ax.set_ylim(y_low, y_high)
-
-		x_hat, X, w = filter_for_one(t, t+dt, X, w, zk, R, P)
+		ax.set_xlim(-1, 11)
+		ax.set_ylim(0, 5)
+		x_hat, X, w = posteriori(X, w, zk, R)
 		errs.append(xk - x_hat)
 		# A posteriori
 		plt.scatter(X[:,0], X[:,1], marker=".", c='r', alpha=.05, label="Particle")
@@ -170,6 +167,8 @@ if __name__ == "__main__":
 		plt.grid()
 		plt.pause(dt/100)
 		plt.clf()
+
+		X = aprori_all_particles(t, t+dt, X, P)
 		# Ground truth
 		xk, state_traj, *_ = propagate_state(t, t+dt, xk)
 		zk = multivariate_normal(xk[:2], 0.01*R)
