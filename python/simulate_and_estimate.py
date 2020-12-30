@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from filter_one import posteriori, uniform_init, obs_error_p, aprori_all_particles
+from filter_one import jpda_posteriori, posteriori, uniform_init, obs_error_p, aprori_all_particles
 from propagate_state import propagate_state
 import numpy as np
 from scipy.linalg import block_diag
@@ -11,6 +11,7 @@ import math
 import argparse
 from rich.console import Console
 from rich.table import Table
+from itertools import permutations
 
 console = Console()
 
@@ -19,16 +20,13 @@ console = Console()
 # Specify init position and velocities for all balls
 # Calculate final error, with verbose options
 
-N_PARTICLES = 1000
+N_PARTICLES = 500
 
 class Ball:
-	def __init__(self, state: list, R: list, P: list, color: str):
+	def __init__(self, state: list, R: list, P: list, color: str, known_init_pos: bool=True):
 		self.state = state
-		# This is the ground truth simulation for a ball
 		self.init_simulation()
-		# I suppose every ball gets a filter, luxurious!
-		# Note: I don't think this is what they do in the paper, but it's too late to figure out atm
-		self.init_filter(R)
+		self.init_filter(R, P, known_init_pos)
 
 		#Process noise of each simulation
 		self.P = P
@@ -41,9 +39,13 @@ class Ball:
 		self.t = 0
 		self.old_t = 0
 
-	def init_filter(self, R):
+	def init_filter(self, R, P, known_init_pos):
 		self.R = R
-		self.particles = uniform_init(x_low=-1, x_high=11, y_low=0, y_high=5, v_x=4, v_y=4, n=N_PARTICLES)
+		self.P = P
+		if known_init_pos:
+			self.particles = multivariate_normal(self.state, P, N_PARTICLES)
+		else:
+			self.particles = uniform_init(x_low=-1, x_high=11, y_low=0, y_high=5, v_x=4, v_y=4, n=N_PARTICLES)
 		self.weights = np.repeat(1/N_PARTICLES, N_PARTICLES)
 		self.state_estimate = np.average(self.particles, axis=0, weights=self.weights)
 		self.z_hat = self.state_estimate[:2]
@@ -57,7 +59,7 @@ class Ball:
 
 
 	def estimate(self, zk, beta=None):
-		self.state_estimate, self.particles, self.weights = posteriori(self.particles,
+		self.state_estimate, self.particles, self.weights = jpda_posteriori(self.particles,
 																		self.weights,
 																		zk,
 																		self.R,
@@ -69,46 +71,48 @@ class Ball:
 		self.particles = aprori_all_particles(self.t, self.t+dt, self.particles, self.P)
 		self.z_hat = np.average(self.particles, axis=0, weights=self.weights)[:2]
 
-def calc_beta(measurements, balls):
-	"""
-	beta: sizeof(targets) x sizeof(measurements) 
-	"""
-	M = len(measurements)
-	T = len(balls)
-	P_D = .9
-	P_FA = .05
+# Only works when nr of measurements and nr of targets are equal
+def temp_feasible_association_events(n):
+	'''
+	Finds all feasible association event, that is
+	the combinations of all targets and measurements.
+	value "0" indicates invalid detection.
+	One target can only be associated to a single measurement. 
+	'''
+	meas = list(np.arange(n+1))
+	p = permutations(meas, n)
+	return np.array([[0]*n]+list(p))
 
-	# z0 assignments, i.e. false measurements,
-	# should differ for each ball but we don't care atm 
-	# since we have no gates to care about.
-	gate_radius = 5
+def joint_event_posterior(measurements, targets, event):
+	'''
+	Calculates the posterior probability of an event.
+	Invalid detections (value 0) are omitted.
+	'''
+	P_D = 0.9
+	P_FA = 0.01
+	target_associations = np.count_nonzero(event!=0)
+	false_alarms = len(measurements) - target_associations
+	weight = P_FA ** false_alarms * (1 - P_D) ** (len(targets) - target_associations) * P_D ** target_associations
+	prod = 1	
+	for t, m_idx  in enumerate(event):
+		if m_idx != 0:
+			prod *= obs_error_p(measurements[m_idx-1]-targets[t].z_hat, targets[t].R) 
+	return weight*prod
 
-	# theta_t^j is the particular event which assigns the measurement j to the target t
-	individual_events = np.zeros((T, M))
-	joint_probs = np.zeros_like(individual_events)
-
-	for t, ball in enumerate(balls):
-		for j, m in enumerate(measurements):
-			dist = np.linalg.norm(m - ball.z_hat)
-			if dist > gate_radius:
-				continue
-			individual_events[t, j] = obs_error_p(m - ball.z_hat, ball.R)
-	for t, target in enumerate(individual_events):
-		valid_measurements = target != 0
-		n_z0 = M - valid_measurements.sum()
-		p_theta = P_D**(T-n_z0)*(1 - P_D)**n_z0*P_FA**(M-(T-n_z0))*np.prod(target, where=valid_measurements)
-		joint_probs[t][valid_measurements] = p_theta
-
-	"""
-	Figure out wtf,
-	... as the θ_j^t summation over all the joint events in
-	which the marginal event θ^j_t, of interest occurs.
-
-	Why is this dimension so high?
-	"""
-	# There's  < 0% chance that this is right..
-	# I have no idea.. this maybe?
-	beta = np.tile(joint_probs.sum(axis=1), (T,1))
+def calc_beta(measurements, target_idx, targets, feasible_events):
+	'''
+	Calculates the probability of a target beeing associated to each measurement
+	measurements: List of all measurements
+	target_idx: Index of target in targets list 
+	targets: List of targets
+	feasible_events: np array of all feasible events
+	'''
+	beta = np.zeros(len(measurements)+1)
+	for m_idx in range(len(measurements)+1):
+		events_rows = np.where(feasible_events[:,target_idx]==m_idx)[0]
+		events = feasible_events[events_rows,:]
+		for event in events:
+			beta[m_idx]+=joint_event_posterior(measurements, targets, event)
 	return beta
 
 
@@ -141,11 +145,12 @@ def display_table(balls):
 
 def main(args):
 	noplot = args["noplot"]
-	R = 0.1**2 * np.eye(2)
+	R = 0.5**2 * np.eye(2)
 	P = 0.1 **2 * np.eye(4) #Try with different covariances for velocities?
 	# Base colors available: gbcmyk
 	balls = [init_ball([0, 3, 2, -6], R, P, 'g'),
-			init_ball([10, 5, -1, -1], R, P, 'b')]
+			init_ball([10, 5, -1, -1], R, P, 'b'),
+			init_ball([0, 7, 4, -2], R, P, 'y')]
 	
 	dt = .05
 	simulation_time = 5
@@ -154,26 +159,26 @@ def main(args):
 		plt.ylabel("Y [m]")
 		ax = plt.gca()
 		ax.set_xlim(-1, 11)
-		ax.set_ylim(0, 5)
+		ax.set_ylim(0, 8)
 		plt.grid()
 
 	# Loop for 10 secs
 	for t in np.arange(0, simulation_time, dt):
 		measurements = [multivariate_normal(b.state[:2], b.R) for b in balls]
-		beta = calc_beta(measurements, balls)
+		feasible_events = temp_feasible_association_events(len(balls))
 		for i, ball in enumerate(balls, start=1):
 			# Filter
-			zk = multivariate_normal(ball.state[:2], R)
-			ball.estimate(zk, beta)
+			beta = calc_beta(measurements, i-1, balls, feasible_events)
+			ball.estimate(measurements, beta)
 			ball.predict(dt)
 
 			if not noplot:
-				plt.scatter(ball.state[0], ball.state[1], marker=".", c=ball.color, label=f"G.T. Ball #{i}")
-				plt.scatter(ball.state_estimate[0], ball.state_estimate[1], c='k', marker="*", label=f"Approx. Ball #{i}")
+				plt.scatter(measurements[i-1][0], measurements[i-1][1], marker="*", c=ball.color, label=f"G.T. Ball #{i}")
+				plt.scatter(ball.state[0], ball.state[1], marker="o", c=ball.color, label=f"G.T. Ball #{i}")
+				plt.scatter(ball.state_estimate[0], ball.state_estimate[1], c='k', marker="x", label=f"Approx. Ball #{i}")
 				plt.pause(dt/10)
 			# Ground truth
 			ball.propagate_simulation(t+dt)
-
 	if not noplot:
 		for ball in balls:
 			traj = np.array(ball.state_traj)

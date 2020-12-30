@@ -90,13 +90,13 @@ def posteriori(X, w, z_k, R, beta=None):
 
 	N, nx = X.shape
 	nz, = z_k.shape
-
 	Z = np.zeros((N, nz))
 	for i in range(N):
 		Z[i, :] = measurement_f(X[i, :])
 		w[i] *= obs_error_p(z_k - Z[i, :], R)
 		if beta is not None:
 			assert type(beta) is np.ndarray, "Beta must be an array"
+			# print(beta)
 			w[i] = np.sum(beta * w[i])
 
 	if w.sum() < eps: # Avoid /0 errors when particles are too far away.
@@ -117,6 +117,52 @@ def posteriori(X, w, z_k, R, beta=None):
 	x_hat = np.average(X, axis=0, weights=w)
 	
 	return x_hat, X, w
+
+def jpda_posteriori(X, w, z_k, R, beta):
+	"""
+	*_before: values for * at k-1
+	t_k: time for current measurement
+	z_k: list of measurements at k
+	f: propagation function
+	h: measurement function
+
+	return
+	x_hat: mean state estimate for k
+	X_k: particle set for k
+	w_k: particle weights for k
+	"""
+	eps = np.spacing(1)
+
+	N, nx = X.shape
+	nz, = z_k[0].shape
+
+	if beta is not None:
+		assert type(beta) is np.ndarray, "Beta must be an array"
+
+	Z = np.zeros((N, nz))
+	for i in range(N):
+		Z[i, :] = measurement_f(X[i, :])
+		w_temp = beta[0]
+		for m_idx in range(len(z_k)):
+			w_temp += beta[m_idx+1]*obs_error_p(z_k[m_idx] - Z[i, :], R)	
+		w[i] *= w_temp
+
+	if w.sum() < eps: # Avoid /0 errors when particles are too far away.
+		w = np.repeat(1/N, N)
+		print("no")
+	else:
+		w /= w.sum()
+
+	ind = systematic_resampling(w, N)
+	X = X[ind]
+	w = np.repeat(1/N, N)
+
+	P = np.cov(X.T) #rows are variables and cols are observations in np.cov
+
+	x_hat = np.average(X, axis=0, weights=w)
+	
+	return x_hat, X, w
+
 
 
 if __name__ == "__main__":
