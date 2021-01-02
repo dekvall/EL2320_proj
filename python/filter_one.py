@@ -86,33 +86,34 @@ def posteriori(X, w, z_k, R, beta=None):
 	X_k: particle set for k
 	w_k: particle weights for k
 	"""
-	eps = np.spacing(1)
+	if len(z_k) != 0:
+		eps = np.spacing(1)
 
-	N, nx = X.shape
-	nz, = z_k.shape
-	Z = np.zeros((N, nz))
-	for i in range(N):
-		Z[i, :] = measurement_f(X[i, :])
-		w[i] *= obs_error_p(z_k - Z[i, :], R)
-		if beta is not None:
-			assert type(beta) is np.ndarray, "Beta must be an array"
-			# print(beta)
-			w[i] = np.sum(beta * w[i])
+		N, nx = X.shape
+		nz, = z_k.shape
+		Z = np.zeros((N, nz))
+		for i in range(N):
+			Z[i, :] = measurement_f(X[i, :])
+			w[i] *= obs_error_p(z_k - Z[i, :], R)
+			if beta is not None:
+				assert type(beta) is np.ndarray, "Beta must be an array"
+				# print(beta)
+				w[i] = np.sum(beta * w[i])
 
-	if w.sum() < eps: # Avoid /0 errors when particles are too far away.
+		if w.sum() < eps: # Avoid /0 errors when particles are too far away.
+			w = np.repeat(1/N, N)
+		else:
+			w /= w.sum()
+
+		ind = systematic_resampling(w, N)
+		X = X[ind]
 		w = np.repeat(1/N, N)
-	else:
-		w /= w.sum()
 
-	ind = systematic_resampling(w, N)
-	X = X[ind]
-	w = np.repeat(1/N, N)
+		# Use sample covariance to perturb the particles
+		P = np.cov(X.T) #rows are variables and cols are observations in np.cov
 
-	# Use sample covariance to perturb the particles
-	P = np.cov(X.T) #rows are variables and cols are observations in np.cov
-
-#   This should be the same as the propagation in the loop above, except for the addition of tune
-#	X = np.apply_along_axis(lambda r: multivariate_normal(mean=r, cov=tune * P), axis=1, arr=X)
+	#   This should be the same as the propagation in the loop above, except for the addition of tune
+	#	X = np.apply_along_axis(lambda r: multivariate_normal(mean=r, cov=tune * P), axis=1, arr=X)
 
 	x_hat = np.average(X, axis=0, weights=w)
 	
@@ -131,33 +132,34 @@ def jpda_posteriori(X, w, z_k, R, beta):
 	X_k: particle set for k
 	w_k: particle weights for k
 	"""
-	eps = np.spacing(1)
+	if len(z_k) != 0:
+		eps = np.spacing(1)
 
-	N, nx = X.shape
-	nz, = z_k[0].shape
+		N, nx = X.shape
+		nz, = z_k[0].shape
 
-	if beta is not None:
-		assert type(beta) is np.ndarray, "Beta must be an array"
+		if beta is not None:
+			assert type(beta) is np.ndarray, "Beta must be an array"
 
-	Z = np.zeros((N, nz))
-	for i in range(N):
-		Z[i, :] = measurement_f(X[i, :])
-		w_temp = beta[0]
-		for m_idx in range(len(z_k)):
-			w_temp += beta[m_idx+1]*obs_error_p(z_k[m_idx] - Z[i, :], R)	
-		w[i] *= w_temp
+		Z = np.zeros((N, nz))
+		for i in range(N):
+			Z[i, :] = measurement_f(X[i, :])
+			w_temp = beta[0]
+			for m_idx in range(len(z_k)):
+				w_temp += beta[m_idx+1]*obs_error_p(z_k[m_idx] - Z[i, :], R)	
+			w[i] *= w_temp
 
-	if w.sum() < eps: # Avoid /0 errors when particles are too far away.
+		if w.sum() < eps: # Avoid /0 errors when particles are too far away.
+			w = np.repeat(1/N, N)
+			print("no")
+		else:
+			w /= w.sum()
+
+		ind = systematic_resampling(w, N)
+		X = X[ind]
 		w = np.repeat(1/N, N)
-		print("no")
-	else:
-		w /= w.sum()
 
-	ind = systematic_resampling(w, N)
-	X = X[ind]
-	w = np.repeat(1/N, N)
-
-	P = np.cov(X.T) #rows are variables and cols are observations in np.cov
+		P = np.cov(X.T) #rows are variables and cols are observations in np.cov
 
 	x_hat = np.average(X, axis=0, weights=w)
 	

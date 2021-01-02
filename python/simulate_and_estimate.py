@@ -12,18 +12,20 @@ import argparse
 from rich.console import Console
 from rich.table import Table
 from itertools import permutations
+from sympy.utilities.iterables import multiset_permutations
 
 console = Console()
+np.random.seed(60)
 
 
 # Main loop for all balls
 # Specify init position and velocities for all balls
 # Calculate final error, with verbose options
 
-N_PARTICLES = 500
+N_PARTICLES = 800
 
 class Ball:
-	def __init__(self, state: list, R: list, P: list, color: str, known_init_pos: bool=True):
+	def __init__(self, state: list, R: list, P: list, color: str, t_no_meas_start: float, t_no_meas_end: float, known_init_pos: bool=True):
 		self.state = state
 		self.init_simulation()
 		self.init_filter(R, P, known_init_pos)
@@ -32,6 +34,8 @@ class Ball:
 		self.P = P
 		self.color = color
 		self.errs = None
+		self.t_no_meas_start = t_no_meas_start
+		self.t_no_meas_end = t_no_meas_end
 
 	def init_simulation(self):
 		self.state_traj = None
@@ -44,6 +48,9 @@ class Ball:
 		self.P = P
 		if known_init_pos:
 			self.particles = multivariate_normal(self.state, P, N_PARTICLES)
+			self.particles[:,2] = np.random.uniform(-10, 10, N_PARTICLES)
+			self.particles[:,3] = np.random.uniform(-10, 10, N_PARTICLES)
+
 		else:
 			self.particles = uniform_init(x_low=-1, x_high=11, y_low=0, y_high=5, v_x=4, v_y=4, n=N_PARTICLES)
 		self.weights = np.repeat(1/N_PARTICLES, N_PARTICLES)
@@ -67,21 +74,64 @@ class Ball:
 		err = self.state - self.state_estimate
 		self.errs = np.vstack((self.errs, err)) if self.errs is not None else err
 
-	def predict(self, dt):
-		self.particles = aprori_all_particles(self.t, self.t+dt, self.particles, self.P)
+	def predict(self, delta_t):
+		self.particles = aprori_all_particles(self.t, self.t+delta_t, self.particles, self.P)
 		self.z_hat = np.average(self.particles, axis=0, weights=self.weights)[:2]
 
-# Only works when nr of measurements and nr of targets are equal
-def temp_feasible_association_events(n):
+	def is_measurement_valid(self):
+		if (self.t_no_meas_start is not None and self.t >= self.t_no_meas_start) and (self.t_no_meas_end is None or self.t < self.t_no_meas_end):
+			return False
+
+		return True
+		
+
+class MeasurementObject:
+
+	def __init__(self, covariance, boundaries, p_measurement=1., p_clutter=0.):
+		self.covariance = covariance
+		self.boundaries = boundaries
+		self.p_measurement = p_measurement
+		self.p_clutter = p_clutter
+
+	def get_clutter(self):
+		if rand() < self.p_clutter:
+			x_clutter = np.random.uniform(self.boundaries[0], self.boundaries[1])
+			y_clutter = np.random.uniform(self.boundaries[2], self.boundaries[3])
+			return [np.array([x_clutter, y_clutter])]
+		return []
+
+	def get_measurement(self, balls):
+		return [multivariate_normal(b.state[:2], self.covariance) for b in balls if rand() < self.p_measurement and b.is_measurement_valid()] + self.get_clutter()
+
+
+
+def dist(meas, ball):
+	return (meas[0]-ball.z_hat[0])**2 + (meas[1]-ball.z_hat[1])**2
+
+def feasible_association_events(measurements, targets, gating=None):
 	'''
 	Finds all feasible association event, that is
 	the combinations of all targets and measurements.
 	value "0" indicates invalid detection.
 	One target can only be associated to a single measurement. 
 	'''
-	meas = list(np.arange(n+1))
-	p = permutations(meas, n)
-	return np.array([[0]*n]+list(p))
+
+	meas_linspace = np.arange(len(measurements)+1)
+	meas_linspace = np.append(meas_linspace, np.zeros(len(measurements), dtype=np.int16))
+	perm_obj = multiset_permutations(meas_linspace, size=len(targets))
+	
+	permutations = []
+	for p in perm_obj:
+		check = True
+		if gating != None:
+			for t, m in enumerate(p):
+				if m != 0 and dist(measurements[m-1], targets[t]) > gating**2:
+					check = False
+					break
+		if check:
+			permutations.append(p)
+
+	return np.array(permutations)
 
 def joint_event_posterior(measurements, targets, event):
 	'''
@@ -108,17 +158,19 @@ def calc_beta(measurements, target_idx, targets, feasible_events):
 	feasible_events: np array of all feasible events
 	'''
 	beta = np.zeros(len(measurements)+1)
-	for m_idx in range(len(measurements)+1):
-		events_rows = np.where(feasible_events[:,target_idx]==m_idx)[0]
-		events = feasible_events[events_rows,:]
-		for event in events:
-			beta[m_idx]+=joint_event_posterior(measurements, targets, event)
+	if len(measurements) != 0:
+		for m_idx in range(len(measurements)+1):
+			events_rows = np.where(feasible_events[:,target_idx]==m_idx)[0]
+			events = feasible_events[events_rows,:]
+			for event in events:
+				beta[m_idx]+=joint_event_posterior(measurements, targets, event)
+
 	return beta
 
 
-def init_ball(x, R, P, color):
+def init_ball(x, R, P, color, no_meas_start=None, no_meas_end=None):
 	x = np.array(x)
-	return Ball(x, R, P, color)
+	return Ball(x, R, P, color, no_meas_start, no_meas_end)
 
 def plot_error(ball):
 	plt.plot(ball.errs[:,0], label="X err")
@@ -143,42 +195,43 @@ def display_table(balls):
 		table.add_row("vy", f"{vy_err:.3f}", f"{vy_var:.3f}", end_section=True)
 	console.print(table)
 
-def main(args):
-	noplot = args["noplot"]
-	R = 0.5**2 * np.eye(2)
-	P = 0.1 **2 * np.eye(4) #Try with different covariances for velocities?
-	# Base colors available: gbcmyk
-	balls = [init_ball([0, 3, 2, -6], R, P, 'g'),
-			init_ball([10, 5, -1, -1], R, P, 'b'),
-			init_ball([0, 7, 4, -2], R, P, 'y')]
-	
-	dt = .05
-	simulation_time = 5
+
+def set_axis_limit(balls, ax):
+	init_states = np.array([ball.state[0:2] for ball in balls])
+	ax.set_xlim(np.min(init_states[:,0])-1, np.max(init_states[:,0])+1)
+	ax.set_ylim(0, np.max(init_states[:,1])+1)
+
+
+def monte_carlo_jpdaf_simulation(sim_time, delta_t, balls, meas_obj, plot_boundaries, noplot):
 	if not noplot:
 		plt.xlabel("X [m]")
 		plt.ylabel("Y [m]")
 		ax = plt.gca()
-		ax.set_xlim(-1, 11)
-		ax.set_ylim(0, 8)
+		ax.set_xlim(plot_boundaries[0], plot_boundaries[1])
+		ax.set_ylim(plot_boundaries[2], plot_boundaries[3])
 		plt.grid()
 
-	# Loop for 10 secs
-	for t in np.arange(0, simulation_time, dt):
-		measurements = [multivariate_normal(b.state[:2], b.R) for b in balls]
-		feasible_events = temp_feasible_association_events(len(balls))
+	gate_size = 2
+	# Loop through specified simulation time
+	for t in np.arange(0, sim_time, delta_t):
+		measurements = meas_obj.get_measurement(balls)
+		if len(measurements) == 0:
+			print("No measurements")
+		feasible_events = feasible_association_events(measurements, balls, gate_size)
 		for i, ball in enumerate(balls, start=1):
 			# Filter
 			beta = calc_beta(measurements, i-1, balls, feasible_events)
 			ball.estimate(measurements, beta)
-			ball.predict(dt)
+			ball.predict(delta_t)
 
 			if not noplot:
-				plt.scatter(measurements[i-1][0], measurements[i-1][1], marker="*", c=ball.color, label=f"G.T. Ball #{i}")
-				plt.scatter(ball.state[0], ball.state[1], marker="o", c=ball.color, label=f"G.T. Ball #{i}")
-				plt.scatter(ball.state_estimate[0], ball.state_estimate[1], c='k', marker="x", label=f"Approx. Ball #{i}")
-				plt.pause(dt/10)
+				for m in measurements:
+					plt.scatter(m[0], m[1], marker="*", c='r', label=f"G.T. Ball #{i}")
+				plt.scatter(ball.state[0], ball.state[1], marker="o", facecolors='none', edgecolors=ball.color, label=f"G.T. Ball #{i}")
+				plt.scatter(ball.state_estimate[0], ball.state_estimate[1], c=ball.color, marker="x", label=f"Approx. Ball #{i}")
+				plt.pause(delta_t/10)
 			# Ground truth
-			ball.propagate_simulation(t+dt)
+			ball.propagate_simulation(t+delta_t)
 	if not noplot:
 		for ball in balls:
 			traj = np.array(ball.state_traj)
@@ -192,6 +245,23 @@ def main(args):
 
 	display_table(balls)
 
+
+
+def main(args):
+	noplot = args["noplot"]
+	R = 0.2**2 * np.eye(2)
+	P = 0.1 **2 * np.eye(4)
+	# Base colors available: gbcmyk
+	balls = [init_ball([0, 3, 2, -6], R, P, 'g'),
+			init_ball([10, 5, -1, -1], R, P, 'b'),
+			init_ball([0, 7, 4, -2], R, P, 'y')]
+
+	meas_obj = MeasurementObject(R, np.array([0, 10, 0, 10]))
+	delta_t = .1
+	sim_time = 3
+
+	monte_carlo_jpdaf_simulation(sim_time, delta_t, balls, meas_obj, meas_obj.boundaries, noplot)
+	
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="An implementaion of MC-JPDAF")
