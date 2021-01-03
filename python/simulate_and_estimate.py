@@ -22,13 +22,15 @@ np.random.seed(60)
 # Specify init position and velocities for all balls
 # Calculate final error, with verbose options
 
-N_PARTICLES = 800
+N_PARTICLES = 500
 
 class Ball:
-	def __init__(self, state: list, R: list, P: list, color: str, t_no_meas_start: float, t_no_meas_end: float, known_init_pos: bool=True):
+	def __init__(self, state: list, R: list, P: list, color: str, t_no_meas_start: float, t_no_meas_end: float, known_init_pos: bool=False):
 		self.state = state
+		self.known_init_pos = known_init_pos
+		self.gate_size = 10
 		self.init_simulation()
-		self.init_filter(R, P, known_init_pos)
+		self.init_filter(R, P)
 
 		#Process noise of each simulation
 		self.P = P
@@ -43,16 +45,16 @@ class Ball:
 		self.t = 0
 		self.old_t = 0
 
-	def init_filter(self, R, P, known_init_pos):
+	def init_filter(self, R, P):
 		self.R = R
 		self.P = P
-		if known_init_pos:
+		if self.known_init_pos:
 			self.particles = multivariate_normal(self.state, P, N_PARTICLES)
 			self.particles[:,2] = np.random.uniform(-10, 10, N_PARTICLES)
 			self.particles[:,3] = np.random.uniform(-10, 10, N_PARTICLES)
 
 		else:
-			self.particles = uniform_init(x_low=-1, x_high=11, y_low=0, y_high=5, v_x=4, v_y=4, n=N_PARTICLES)
+			self.particles = uniform_init(x_low=-5, x_high=11, y_low=0, y_high=15, v_x=10, v_y=10, n=N_PARTICLES)
 		self.weights = np.repeat(1/N_PARTICLES, N_PARTICLES)
 		self.state_estimate = np.average(self.particles, axis=0, weights=self.weights)
 		self.z_hat = self.state_estimate[:2]
@@ -78,12 +80,36 @@ class Ball:
 		self.particles = aprori_all_particles(self.t, self.t+delta_t, self.particles, self.P)
 		self.z_hat = np.average(self.particles, axis=0, weights=self.weights)[:2]
 
-	def is_measurement_valid(self):
+	def has_valid_measurement(self):
 		if (self.t_no_meas_start is not None and self.t >= self.t_no_meas_start) and (self.t_no_meas_end is None or self.t < self.t_no_meas_end):
 			return False
 
 		return True
 		
+	def has_converged(self, threshold):
+		return (not self.known_init_pos) and (np.cov(self.particles[:,:2].T) < threshold).all()
+
+	def remove_particles(self, balls):
+		radius = 1
+		bounds = np.empty([0,2])
+
+		# Remove particles from areas cointaining existing targets
+		for b in balls:
+			dist = (self.particles[:,0]-b.z_hat[0])**2+(self.particles[:,1]-b.z_hat[1])**2
+			self.particles = np.delete(self.particles, dist < radius**2, 0)
+			bounds = np.vstack((bounds, np.array([b.z_hat[0], b.z_hat[1]])))
+
+		# Resample particles to original number
+		while self.particles.shape[0] < N_PARTICLES:
+			x = np.random.uniform(-10, 10, 1)
+			y = np.random.uniform(-10, 10, 1)
+			vx = np.random.uniform(-10, 10, 1)
+			vy = np.random.uniform(-10, 10, 1)
+			dist = (bounds[:,0]-x[0])**2+(bounds[:,1]-y[0])**2
+			if (dist > radius).all():
+				self.particles = np.vstack((self.particles, np.array([x[0], y[0], vx[0], vy[0]])))
+
+
 
 class MeasurementObject:
 
@@ -101,7 +127,7 @@ class MeasurementObject:
 		return []
 
 	def get_measurement(self, balls):
-		return [multivariate_normal(b.state[:2], self.covariance) for b in balls if rand() < self.p_measurement and b.is_measurement_valid()] + self.get_clutter()
+		return [multivariate_normal(b.state[:2], self.covariance) for b in balls if rand() < self.p_measurement and b.has_valid_measurement()] + self.get_clutter()
 
 
 
@@ -133,6 +159,13 @@ def feasible_association_events(measurements, targets, gating=None):
 
 	return np.array(permutations)
 
+def predictive_likelihood(measurement, target):	
+	likelihood = np.zeros(N_PARTICLES)
+	for p in range(N_PARTICLES):
+		likelihood[p] = obs_error_p(measurement-target.particles[p][:2], target.R)
+
+	return np.sum(likelihood)*1/N_PARTICLES
+
 def joint_event_posterior(measurements, targets, event):
 	'''
 	Calculates the posterior probability of an event.
@@ -143,11 +176,12 @@ def joint_event_posterior(measurements, targets, event):
 	target_associations = np.count_nonzero(event!=0)
 	false_alarms = len(measurements) - target_associations
 	weight = P_FA ** false_alarms * (1 - P_D) ** (len(targets) - target_associations) * P_D ** target_associations
-	prod = 1	
+	prod = 1
 	for t, m_idx  in enumerate(event):
 		if m_idx != 0:
-			prod *= obs_error_p(measurements[m_idx-1]-targets[t].z_hat, targets[t].R) 
+			prod *= predictive_likelihood(measurements[m_idx-1], targets[t]) 
 	return weight*prod
+
 
 def calc_beta(measurements, target_idx, targets, feasible_events):
 	'''
@@ -202,7 +236,7 @@ def set_axis_limit(balls, ax):
 	ax.set_ylim(0, np.max(init_states[:,1])+1)
 
 
-def monte_carlo_jpdaf_simulation(sim_time, delta_t, balls, meas_obj, plot_boundaries, noplot):
+def monte_carlo_jpdaf_simulation(sim_time, delta_t, all_balls, meas_obj, plot_boundaries, noplot):
 	if not noplot:
 		plt.xlabel("X [m]")
 		plt.ylabel("Y [m]")
@@ -211,27 +245,50 @@ def monte_carlo_jpdaf_simulation(sim_time, delta_t, balls, meas_obj, plot_bounda
 		ax.set_ylim(plot_boundaries[2], plot_boundaries[3])
 		plt.grid()
 
-	gate_size = 2
+	gate_size = 10
+	covariance_threshold = 0.5
+
+	# Determine if tracking or global localization
+	ball_idx = 0
+	if not all_balls[0].known_init_pos:
+		balls = [all_balls[0]]
+
+	else:
+		balls = all_balls
+
 	# Loop through specified simulation time
 	for t in np.arange(0, sim_time, delta_t):
+		# Initialization of new balls
+		if balls[-1].has_converged(covariance_threshold):
+			balls[-1].gate_size = 1
+			if ball_idx + 2 <= len(all_balls):
+				print("Ball nr ", ball_idx + 1, "Has converged, Initializing next ball")
+				all_balls[ball_idx+1].remove_particles(balls)
+				balls.append(all_balls[ball_idx+1])
+				ball_idx += 1
+
 		measurements = meas_obj.get_measurement(balls)
+		if not noplot:
+			for m in measurements:
+				plt.scatter(m[0], m[1], marker="*", c='r')
+
 		if len(measurements) == 0:
 			print("No measurements")
 		feasible_events = feasible_association_events(measurements, balls, gate_size)
 		for i, ball in enumerate(balls, start=1):
+						
 			# Filter
 			beta = calc_beta(measurements, i-1, balls, feasible_events)
 			ball.estimate(measurements, beta)
 			ball.predict(delta_t)
 
 			if not noplot:
-				for m in measurements:
-					plt.scatter(m[0], m[1], marker="*", c='r', label=f"G.T. Ball #{i}")
 				plt.scatter(ball.state[0], ball.state[1], marker="o", facecolors='none', edgecolors=ball.color, label=f"G.T. Ball #{i}")
 				plt.scatter(ball.state_estimate[0], ball.state_estimate[1], c=ball.color, marker="x", label=f"Approx. Ball #{i}")
 				plt.pause(delta_t/10)
 			# Ground truth
 			ball.propagate_simulation(t+delta_t)
+
 	if not noplot:
 		for ball in balls:
 			traj = np.array(ball.state_traj)

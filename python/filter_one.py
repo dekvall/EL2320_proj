@@ -159,7 +159,6 @@ def jpda_posteriori(X, w, z_k, R, beta):
 		X = X[ind]
 		w = np.repeat(1/N, N)
 
-		P = np.cov(X.T) #rows are variables and cols are observations in np.cov
 
 	x_hat = np.average(X, axis=0, weights=w)
 	
