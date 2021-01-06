@@ -19,7 +19,7 @@ snapshots = []
 G = 9.8
 DT = 1./cap.get(cv2.CAP_PROP_FPS)
 BOUNCE_COEFF = 0.7 #Arbitrary
-PIXEL_SCALE = .007 #Size of pixel in m for a resolution of 320x240
+PIXEL_SCALE = .007 #Size of pixel in m for a resolution of 320x240 prev 0.007
 
 def create_blob_params():
 	# Setup SimpleBlobDetector parameters.
@@ -64,30 +64,35 @@ def detect_with_diff(frame, first):
 	# Blob detection with black background requires the image to be inverted
 	inverted = cv2.bitwise_not(fullgray)
 	keypoints = detector.detect(inverted)
-
+	
+	graph.append([])
 	if keypoints:
 		height, width = fullgray.shape
-		x, y = keypoints[0].pt
-		y = height - y
+		for p in keypoints:		
+			x, y = p.pt
+			y = height - y
 
-		x *= PIXEL_SCALE
-		y *= PIXEL_SCALE
+			x *= PIXEL_SCALE
+			y *= PIXEL_SCALE
+			graph[-1].append(np.array([x, y]))
 
-		graph.append((x, y))
 		snapshots.append(fullgray)
 
 	result = cv2.drawKeypoints(frame, keypoints, np.array([]), (255,0,0), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-	return graph[-1] if keypoints else None, cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
+	return graph[-1], cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
 
 
 def main():
 	first = None
 	first_detection = False
+	
 	plot_boundaries = [0, 3, 0, 4]
+	nr_of_balls = 3
+	covariance_threshold = 0.5
+
+	colors = ["k", "c", "y", "m", "b"]
 	noplot = False
 	if not noplot:
-		pass
-	while cap.isOpened():
 		plt.figure(1)
 		plt.xlabel("X [m]")
 		plt.ylabel("Y [m]")
@@ -95,6 +100,7 @@ def main():
 		ax.set_xlim(plot_boundaries[0], plot_boundaries[1])
 		ax.set_ylim(plot_boundaries[2], plot_boundaries[3])
 		plt.grid()
+	while cap.isOpened():
 
 		ret, frame = cap.read()
 		if not ret or cv2.waitKey(1) & 0xFF == ord('q'):
@@ -104,48 +110,56 @@ def main():
 			first = frame
 			continue
 
-		det, diff_result = detect_with_diff(frame, first)
-		print(det)
-		if not first_detection and det is not None:
+		detection, diff_result = detect_with_diff(frame, first)
+		if not first_detection and detection is not None:
 			first_detection = True
-			R = 0.1**2 * np.eye(2)
-			P = 0.1 **2 * np.eye(4)
-			balls = [init_ball([2, 0, 0, 0], R, P, 'g')]
+			R = 0.2**2 * np.eye(2)
+			P = 0.4 **2 * np.eye(4)
+			balls = [init_ball([2, 0, 0, 0], R, P, 'g', plot_boundaries+[10, 10])]
 
 		if first_detection:
 			plt.figure(1)
+	
+			if not noplot:
+				for m in detection:
+					plt.scatter(m[0], m[1], marker="*", c='r')
+	
+			gate_size = True
+			if detection is not None:
+				if balls[-1].has_converged(covariance_threshold):
+					balls[-1].gate_size = 0.5
+					if len(balls) < 3:
+						print("Ball nr ", len(balls) + 1, "Has converged, Initializing next ball")
+						c = colors.pop()
+						new_ball = init_ball([2, 0, 0, 0], R, P, c, plot_boundaries+[10, 10])						
+						new_ball.remove_particles(balls)
+						balls.append(new_ball)
 
-			gate_size = 100
-			if det is None:
-				detection = []
-			else:
-				detection = [np.array(det)]
 			feasible_events = feasible_association_events(detection, balls, gate_size)
 			for i, ball in enumerate(balls, start=1):
 				# Filter
-				beta = calc_beta(detection, i-1, balls, feasible_events)
-				ball.estimate(detection, beta)
+				if i == 1:
+					print(ball.state_estimate)
+				beta, obs_error_dict = calc_beta(detection, i-1, balls, feasible_events)
+				ball.estimate(detection, i-1, beta, obs_error_dict)
 				ball.predict(DT)
-				print(ball.state_estimate)
 				if not noplot:
-					for m in detection:
-						plt.scatter(m[0], m[1], marker="*", c='r', label=f"G.T. Ball #{i}")
 					plt.scatter(ball.state_estimate[0], ball.state_estimate[1], c=ball.color, marker="x", label=f"Approx. Ball #{i}")
-					plt.scatter(ball.particles[:,0], ball.particles[:,1], marker=".", c='r', alpha=.1, label="Particle")
-					
+					# plt.scatter(ball.particles[:,0], ball.particles[:,1], marker=".", c='r', alpha=.1, label="Particle")
+
 					# plt.pause(DT/10)
 				# Ground truth
 
-		true_pos = zip(*graph)
+		# true_pos = zip(*graph)
 		# plt.figure(1)
 		# plt.ylim(0, 1.3)
 		# plt.xlim(0,2)
 		# plt.scatter(*true_pos, c='b')
 
-		plt.figure(2)
-		plt.imshow(diff_result)
-		plt.pause(.01)
-		plt.clf()
+		# plt.figure(2)
+		# plt.imshow(diff_result)
+		plt.pause(.0001)
+		# plt.clf()
 	if not noplot:
 		for ball in balls:
 			traj = np.array(ball.state_traj)

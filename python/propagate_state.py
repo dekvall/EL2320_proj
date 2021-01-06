@@ -54,7 +54,7 @@ def propagate_state(t_start: float, t_end: float, state: list, dt: float =.5) ->
 		else:
 			# No bounce
 			y = y + vy * dt - .5 * G * dt**2
-			vy = vy - G * dt
+			vy = (vy - G * dt)
 
 		x = x + vx * dt
 		vx = 0.99 * vx #Approximate drag

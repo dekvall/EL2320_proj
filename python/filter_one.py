@@ -15,12 +15,12 @@ def prop_f(t_start, t_end, state):
 def measurement_f(x):
 	return x[:2]
 
-def obs_error_p(dz, R):
+def obs_error_p(dz, invR):
 	# Gaussian error which will be normalized away with the particles later
-	invR = np.linalg.inv(R)
-	detR = np.linalg.det(R)
-	d = len(dz)
-	return 1 / (np.power(2*np.pi, d/2) * np.sqrt(detR)) * np.exp(-.5 * dz.T @ invR  @ dz)
+	return np.exp(-.5 * dz.T @ invR  @ dz)
+
+def normalizer(d, detR):
+	return 1 / (np.power(2*np.pi, d/2) * np.sqrt(detR))
 
 def uniform_init(x_low, x_high, y_low, y_high, v_x, v_y, n):
 	return 	np.hstack((
@@ -92,9 +92,12 @@ def posteriori(X, w, z_k, R, beta=None):
 		N, nx = X.shape
 		nz, = z_k.shape
 		Z = np.zeros((N, nz))
+		invR = np.linalg.inv(R)
+		detR = np.linalg.det(R)
+		norm = normalizer(len(z_k), detR)
 		for i in range(N):
 			Z[i, :] = measurement_f(X[i, :])
-			w[i] *= obs_error_p(z_k - Z[i, :], R)
+			w[i] *= norm*obs_error_p(z_k - Z[i, :], invR)
 			if beta is not None:
 				assert type(beta) is np.ndarray, "Beta must be an array"
 				# print(beta)
@@ -119,7 +122,7 @@ def posteriori(X, w, z_k, R, beta=None):
 	
 	return x_hat, X, w
 
-def jpda_posteriori(X, w, z_k, R, beta):
+def jpda_posteriori(X, w, z_k, ball_idx, beta, obs_error_dict):
 	"""
 	*_before: values for * at k-1
 	t_k: time for current measurement
@@ -140,13 +143,18 @@ def jpda_posteriori(X, w, z_k, R, beta):
 
 		if beta is not None:
 			assert type(beta) is np.ndarray, "Beta must be an array"
-
+		
 		Z = np.zeros((N, nz))
+		
+		# Only iterate over the non-zero elements of beta to reduce computational complexity
+		z_a = np.array(z_k)
+		meas_idx = np.where(beta[1:] != 0)[0]
+
 		for i in range(N):
 			Z[i, :] = measurement_f(X[i, :])
 			w_temp = beta[0]
-			for m_idx in range(len(z_k)):
-				w_temp += beta[m_idx+1]*obs_error_p(z_k[m_idx] - Z[i, :], R)	
+			for m_idx in meas_idx:
+				w_temp += beta[m_idx+1]*obs_error_dict[(m_idx, ball_idx)][1][i]
 			w[i] *= w_temp
 
 		if w.sum() < eps: # Avoid /0 errors when particles are too far away.
@@ -169,10 +177,10 @@ def jpda_posteriori(X, w, z_k, R, beta):
 if __name__ == "__main__":
 	# Set up initial state and measurement with noise
 	x0 = np.array([0, 3, 2, -6])
-	R = 0.15**2 * np.eye(2)
+	R = 0.4**2 * np.eye(2)
 	P = 0.1**2 * np.eye(4)
 	z0 = multivariate_normal(x0[:2], R)
-
+	R_meas = 0.3**2 * np.eye(2)
 	# For the filter
 	# invR = np.linalg.inv(R)
 
@@ -197,7 +205,7 @@ if __name__ == "__main__":
 	# add_random_sample(X, 3, 0.8, x_low, x_high, y_low, y_high)
 
 	# Loop for 10 secs
-	for t in np.arange(0, 10, dt):
+	for t in np.arange(0, 7, dt):
 		plt.xlabel("X [m]")
 		plt.ylabel("Y [m]")
 		ax = plt.gca()
@@ -207,7 +215,7 @@ if __name__ == "__main__":
 		errs.append(xk - x_hat)
 		# A posteriori
 		plt.scatter(X[:,0], X[:,1], marker=".", c='r', alpha=.05, label="Particle")
-		plt.scatter(zk[0], zk[1], c='y', label="Measurement")
+		plt.scatter(zk[0], zk[1], c='b', label="Measurement")
 		plt.scatter(x_hat[0], x_hat[1], c='m', label="Approximation")
 		plt.scatter(xk[0], xk[1], c='g', label="Ground truth")
 		plt.legend()
@@ -218,7 +226,7 @@ if __name__ == "__main__":
 		X = aprori_all_particles(t, t+dt, X, P)
 		# Ground truth
 		xk, state_traj, *_ = propagate_state(t, t+dt, xk)
-		zk = multivariate_normal(xk[:2], 0.01*R)
+		zk = multivariate_normal(xk[:2], R_meas)
 		plt.plot(state_traj[:,0], state_traj[:,1], c='g')
 
 	err = np.array(errs)
