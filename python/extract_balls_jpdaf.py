@@ -87,20 +87,20 @@ def main():
 	first_detection = False
 	
 	plot_boundaries = [0, 3, 0, 4]
-	nr_of_balls = 3
+	nr_of_balls = 1
 	covariance_threshold = 0.5
 
 	colors = ["k", "c", "y", "m", "b"]
 	noplot = False
-	if not noplot:
-		plt.figure(1)
-		plt.xlabel("X [m]")
-		plt.ylabel("Y [m]")
-		ax = plt.gca()
-		ax.set_xlim(plot_boundaries[0], plot_boundaries[1])
-		ax.set_ylim(plot_boundaries[2], plot_boundaries[3])
-		plt.grid()
 	while cap.isOpened():
+		if not noplot:
+			plt.figure(1)
+			plt.xlabel("X [m]")
+			plt.ylabel("Y [m]")
+			ax = plt.gca()
+			ax.set_xlim(plot_boundaries[0], plot_boundaries[1])
+			ax.set_ylim(plot_boundaries[2], plot_boundaries[3])
+			plt.grid()
 
 		ret, frame = cap.read()
 		if not ret or cv2.waitKey(1) & 0xFF == ord('q'):
@@ -114,8 +114,8 @@ def main():
 		if not first_detection and detection is not None:
 			first_detection = True
 			R = 0.2**2 * np.eye(2)
-			P = 0.4 **2 * np.eye(4)
-			balls = [init_ball([2, 0, 0, 0], R, P, 'g', plot_boundaries+[10, 10])]
+			P = 0.3 **2 * np.eye(4)
+			balls = [init_ball([0, 0, 0, 0], R, P, 'g', plot_boundaries+[10, 10])]
 
 		if first_detection:
 			plt.figure(1)
@@ -128,10 +128,10 @@ def main():
 			if detection is not None:
 				if balls[-1].has_converged(covariance_threshold):
 					balls[-1].gate_size = 0.5
-					if len(balls) < 3:
+					if len(balls) < nr_of_balls:
 						print("Ball nr ", len(balls) + 1, "Has converged, Initializing next ball")
 						c = colors.pop()
-						new_ball = init_ball([2, 0, 0, 0], R, P, c, plot_boundaries+[10, 10])						
+						new_ball = init_ball([0, 0, 0, 0], R, P, c, plot_boundaries+[10, 10])						
 						new_ball.remove_particles(balls)
 						balls.append(new_ball)
 
@@ -145,7 +145,7 @@ def main():
 				ball.predict(DT)
 				if not noplot:
 					plt.scatter(ball.state_estimate[0], ball.state_estimate[1], c=ball.color, marker="x", label=f"Approx. Ball #{i}")
-					# plt.scatter(ball.particles[:,0], ball.particles[:,1], marker=".", c='r', alpha=.1, label="Particle")
+					plt.scatter(ball.particles[:,0], ball.particles[:,1], marker=".", c='r', alpha=.1, label="Particle")
 
 					# plt.pause(DT/10)
 				# Ground truth
@@ -159,7 +159,7 @@ def main():
 		# plt.figure(2)
 		# plt.imshow(diff_result)
 		plt.pause(.0001)
-		# plt.clf()
+		plt.clf()
 	if not noplot:
 		for ball in balls:
 			traj = np.array(ball.state_traj)

@@ -3,7 +3,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def propagate_state(t_start: float, t_end: float, state: list, dt: float =.5) -> list:
+def propagate_state(t_start: float, t_end: float, state: list, bounce_variance: bool=False, dt: float=.5) -> list:
 	"""
 	in:
 	t_start: Simulation start time
@@ -16,7 +16,12 @@ def propagate_state(t_start: float, t_end: float, state: list, dt: float =.5) ->
 	"""
 	G = 9.82
 	BOUNCE_COEFF = .84 # Tennis balls
-
+	if bounce_variance:
+		BOUNCE_YV_VAR = 0.2
+		BOUNCE_XV_VAR = 0.2
+	else:
+		BOUNCE_YV_VAR = 0
+		BOUNCE_XV_VAR = 0
 	#trajectory start
 	state_traj = [state]
 	time_traj = [t_start]
@@ -42,8 +47,8 @@ def propagate_state(t_start: float, t_end: float, state: list, dt: float =.5) ->
 
 		if dT < dt:
 			# Bounce
-			vy = -BOUNCE_COEFF * (vy - G * dT)
-
+			vy = np.random.normal(-BOUNCE_COEFF * (vy - G * dT), BOUNCE_YV_VAR)
+			vx = np.random.normal(vx, BOUNCE_XV_VAR)
 			# Save bounce state
 			state_traj.append([x + vx * dT, 0, vx, vy])
 			time_traj.append(t - dt + dT)

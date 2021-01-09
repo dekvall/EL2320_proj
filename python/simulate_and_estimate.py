@@ -25,7 +25,7 @@ np.random.seed(60)
 N_PARTICLES = 700
 
 class Ball:
-	def __init__(self, state: list, R: list, P: list, color: str, bound: list, t_no_meas_start: float, t_no_meas_end: float, known_init_pos: bool=False):
+	def __init__(self, state: list, R: list, P: list, color: str, bound: list, bounce_uncertainty: bool, t_no_meas_start: float, t_no_meas_end: float, known_init_pos: bool=False):
 		self.state = state
 		self.known_init_pos = known_init_pos
 		self.gate_size = 10
@@ -34,11 +34,15 @@ class Ball:
 		self.init_simulation()
 		self.init_filter(R, P)
 
-		#Process noise of each simulation
 		self.color = color
 		self.errs = None
+		# Time interval when there is no detection of the ball
 		self.t_no_meas_start = t_no_meas_start
 		self.t_no_meas_end = t_no_meas_end
+
+		# If true, ball will randomly change velocities simulation when bouncing 
+		self.bounce_uncertainty = bounce_uncertainty
+
 
 	def init_simulation(self):
 		self.state_traj = None
@@ -68,7 +72,7 @@ class Ball:
 		self.z_hat = self.state_estimate[:2]
 
 	def propagate_simulation(self, next_t: float):
-		self.state, st, tt = propagate_state(self.t, next_t, self.state)
+		self.state, st, tt = propagate_state(self.t, next_t, self.state, self.bounce_uncertainty)
 		self.state_traj = np.vstack((self.state_traj, st[1:,:])) if self.state_traj is not None else st
 		self.time_traj = np.concatenate((self.time_traj, tt[1:])) if self.time_traj is not None else tt
 		self.old_t = self.t
@@ -223,9 +227,9 @@ def calc_beta(measurements, target_idx, targets, feasible_events):
 	return beta, obs_error_dict
 
 
-def init_ball(x, R, P, color, bound, no_meas_start=None, no_meas_end=None):
+def init_ball(x, R, P, color, bound, bounce_uncertainty=False, no_meas_start=None, no_meas_end=None):
 	x = np.array(x)
-	return Ball(x, R, P, color, bound, no_meas_start, no_meas_end)
+	return Ball(x, R, P, color, bound, bounce_uncertainty, no_meas_start, no_meas_end)
 
 def plot_error(ball):
 	plt.plot(ball.errs[:,0], label="X err")
@@ -279,7 +283,6 @@ def monte_carlo_jpdaf_simulation(sim_time, delta_t, all_balls, meas_obj, plot_bo
 				all_balls[ball_idx+1].remove_particles(balls)
 				balls.append(all_balls[ball_idx+1])
 				ball_idx += 1
-
 		measurements = meas_obj.get_measurement(all_balls)
 		plt.clf()
 
@@ -291,18 +294,17 @@ def monte_carlo_jpdaf_simulation(sim_time, delta_t, all_balls, meas_obj, plot_bo
 			ax.set_ylim(plot_boundaries[2], plot_boundaries[3])
 			plt.grid()
 
-
 		feasible_events = feasible_association_events(measurements, balls)
 		for i, ball in enumerate(balls, start=1):
-						
 			# Filter
 			beta, obs_error_dict = calc_beta(measurements, i-1, balls, feasible_events)
 			ball.estimate(measurements, i-1, beta, obs_error_dict)
 			if (i == len(balls)) and not noplot:
 				plt.scatter(balls[-1].particles[:,0], balls[-1].particles[:,1], marker=".", c='y')
-		
+			if i == 1:
+				print(ball.state_estimate)	
+			
 			ball.predict(delta_t)
-
 			if not noplot:
 				plt.scatter(ball.state[0], ball.state[1], marker="o", facecolors='none', edgecolors=ball.color, label=f"G.T. Ball #{i}")
 				plt.scatter(ball.state_estimate[0], ball.state_estimate[1], c=ball.color, marker="x", label=f"Approx. Ball #{i}")
@@ -316,7 +318,7 @@ def monte_carlo_jpdaf_simulation(sim_time, delta_t, all_balls, meas_obj, plot_bo
 		
 		for ball in all_balls:
 			ball.propagate_simulation(t+delta_t)
-
+		
 	if not noplot:
 		for ball in balls:
 			traj = np.array(ball.state_traj)
