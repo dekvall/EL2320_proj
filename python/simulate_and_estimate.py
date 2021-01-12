@@ -22,7 +22,7 @@ np.random.seed(60)
 # Specify init position and velocities for all balls
 # Calculate final error, with verbose options
 
-N_PARTICLES = 700
+N_PARTICLES = 1000
 
 class Ball:
 	def __init__(self, state: list, R: list, P: list, color: str, bound: list, bounce_uncertainty: bool, t_no_meas_start: float, t_no_meas_end: float, known_init_pos: bool=False):
@@ -189,7 +189,7 @@ def joint_event_posterior(measurements, targets, event, obs_error_dict):
 	Calculates the posterior probability of an event.
 	Invalid detections (value 0) are omitted.
 	'''
-	P_D = 0.9
+	P_D = 0.95
 	P_FA = 0.01
 	target_associations = np.count_nonzero(event!=0)
 	false_alarms = len(measurements) - target_associations
