@@ -5,10 +5,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 from operator import add
 from simulate_and_estimate import *
+import os
 
-#cap = cv2.VideoCapture('../resx/small/2x1-short-small.mp4')
-#cap = cv2.VideoCapture('../resx/small/4-balls-low-small.mp4')
-cap = cv2.VideoCapture('../resources/60fps_full/0_cut_40fps.mp4')
+#filename = '../resources/60fps_full/0_cut_40fps.mp4'
+filename = '../resources/60fps_full/0.mp4'
+
+assert os.path.exists(filename), "Specify a valid filename"
+
+cap = cv2.VideoCapture(filename)
 
 LOWER = (30, 50, 40)
 UPPER = (100, 255, 255)
@@ -17,7 +21,7 @@ graph = []
 snapshots = []
 
 G = 9.8
-DT = 1./cap.get(cv2.CAP_PROP_FPS)
+DT = 1./ cap.get(cv2.CAP_PROP_FPS)
 BOUNCE_COEFF = 0.7 #Arbitrary
 PIXEL_SCALE = .007 #Size of pixel in m for a resolution of 320x240 prev 0.007
 Y_ADJUST = 0.3

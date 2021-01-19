@@ -17,3 +17,4 @@
 *.autosave
 #python
 *.pyc
+python/*.mp4
