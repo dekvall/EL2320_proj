@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from simulate_and_estimate import init_ball, MeasurementObject, monte_carlo_jpdaf_simulation
 from itertools import permutations
 import numpy as np

@@ -153,25 +153,24 @@ def feasible_association_events(measurements, targets, gating=True):
 	value "0" indicates invalid detection.
 	One target can only be associated to a single measurement. 
 	'''
-	meas_linspace = np.arange(len(measurements)+1)
-	meas_linspace = np.append(meas_linspace, np.zeros(len(measurements), dtype=np.int16))
+	meas_linspace = np.arange(len(measurements)+1) # Why is this + 1?
 	perm_obj = multiset_permutations(meas_linspace, size=len(targets))
 	
-	permutations = []
-	for p in perm_obj:
-		check = True
-		if gating:
+	permutations = [] if gating else list(perm_obj)
+
+	if gating:
+		for p in perm_obj:
 			for t, m in enumerate(p):
 				if m != 0 and dist(measurements[m-1], targets[t]) > targets[t].gate_size**2:
-					check = False
 					break
-		if check:
-			permutations.append(p)
+			else:
+				permutations.append(p)
 
-	# No viable measurements if all measurements outside of gates
-	if len(permutations) == 0:
-		print("No viable measurements")
-		measurements.clear()
+		# No viable measurements if all measurements outside of gates
+		if not permutations:
+			print("No viable measurements")
+			measurements.clear()
+
 	return np.array(permutations)
 
 def predictive_likelihood(measurement, target):	
@@ -324,10 +323,10 @@ def monte_carlo_jpdaf_simulation(sim_time, delta_t, all_balls, meas_obj, plot_bo
 			traj = np.array(ball.state_traj)
 			plt.plot(traj[:,0], traj[:,1], c=ball.color)
 
-		for i, ball in enumerate(balls):
+		for i, ball in enumerate(balls, 1):
 			plt.figure(i + 2)
 			plot_error(ball)
-			plt.title(f"Error for ball #{i + 1}")
+			plt.title(f"Error for ball #{i}")
 		plt.show()
 
 	display_table(balls)
@@ -338,10 +337,11 @@ def main(args):
 	noplot = args["noplot"]
 	R = 0.2**2 * np.eye(2)
 	P = 0.1 **2 * np.eye(4)
+	boundaries = [-1, 10, 0, 10, 10, 10] # [x_min, x_max, y_min, y_max, vx, vy]
 	# Base colors available: gbcmyk
-	balls = [init_ball([0, 3, 2, -6], R, P, 'g'),
-			init_ball([10, 5, -1, -1], R, P, 'b'),
-			init_ball([0, 7, 4, -2], R, P, 'y')]
+	balls = [init_ball([0, 3, 2, -6], R, P, 'g', boundaries),
+			init_ball([10, 5, -1, -1], R, P, 'b', boundaries),
+			init_ball([0, 7, 4, -2], R, P, 'y', boundaries)]
 
 	meas_obj = MeasurementObject(R, np.array([0, 10, 0, 10]))
 	delta_t = .1
