@@ -2,15 +2,16 @@ from simulate_and_estimate import init_ball, MeasurementObject, monte_carlo_jpda
 from itertools import permutations
 import numpy as np
 import matplotlib.pyplot as plt
+from sympy.utilities.iterables import multiset_permutations
 
 
 def TEST1():
 	R = 0.2**2 * np.eye(2)
 	P = 0.2 **2 * np.eye(4)
 	boundaries = [-1, 10, 0, 10, 10, 10] # [x_min, x_max, y_min, y_max, vx, vy]
-	balls = [init_ball([0, 3, 2, -6], R, P, 'g', boundaries),
-			init_ball([8, 5, -1, -1], R, P, 'b', boundaries),
-			init_ball([0, 7, 4, -2], R, P, 'y', boundaries)]
+	balls = [init_ball([0, 3, 2, -6], R, P, 'g', boundaries, True),
+			init_ball([8, 5, -1, -1], R, P, 'b', boundaries, True),
+			init_ball([0, 7, 4, -2], R, P, 'y', boundaries, True)]
 
 	R = 0.3**2 * np.eye(2)
 	meas_obj = MeasurementObject(R, boundaries[:4],1, 0.2)
@@ -98,7 +99,7 @@ def TEST5():
 								noplot=False)
 
 def TEST6():
-	R = 0.1**2 * np.eye(2)
+	R = 0.2**2 * np.eye(2)
 	P = 0.2**2 * np.eye(4)
 	boundaries = [-1, 10, 0, 10, 10, 10]	
 	balls = [init_ball([0, 10, 2, -1], R, P, 'g', boundaries),
@@ -137,7 +138,6 @@ def TEST7():
 
 
 
-
 if __name__ == "__main__":
 	# remove_particles()
-	TEST2()
+	TEST1()

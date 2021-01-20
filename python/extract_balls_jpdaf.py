@@ -41,7 +41,7 @@ def create_blob_params():
 	params.filterByConvexity = False
 
 	params.filterByArea = True
-	params.minArea = 40
+	params.minArea = 80
 	return params
 
 
@@ -75,6 +75,7 @@ def detect_with_diff(frame, first):
 		height, width = fullgray.shape
 		for p in keypoints:		
 			x, y = p.pt
+			print(x, y)
 			y = height - y
 
 			x *= PIXEL_SCALE
@@ -110,6 +111,9 @@ def main():
 	result = cv2.VideoWriter("test.mp4", 
 							cv2.VideoWriter_fourcc(*"MJPG"), 
 							cap.get(cv2.CAP_PROP_FPS), (FRAME_WIDTH, FRAME_HEIGHT))
+	plt.figure(1)
+	plt.grid()
+
 	while cap.isOpened():
 		if not noplot:
 			plt.figure(1)
@@ -118,7 +122,6 @@ def main():
 			ax = plt.gca()
 			ax.set_xlim(plot_boundaries[0], plot_boundaries[1])
 			ax.set_ylim(plot_boundaries[2], plot_boundaries[3])
-			plt.grid()
 
 		ret, frame = cap.read()
 		if not ret or cv2.waitKey(1) & 0xFF == ord('q'):
@@ -156,7 +159,7 @@ def main():
 			feasible_events = feasible_association_events(detection, balls, gate_size)
 			for i, ball in enumerate(balls, start=1):
 				# Filter
-				if i == 3:
+				if i == 4:
 					print(ball.state_estimate)
 				beta, obs_error_dict = calc_beta(detection, i-1, balls, feasible_events)
 				ball.estimate(detection, i-1, beta, obs_error_dict)

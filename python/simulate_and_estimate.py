@@ -22,7 +22,7 @@ np.random.seed(60)
 # Specify init position and velocities for all balls
 # Calculate final error, with verbose options
 
-N_PARTICLES = 1000
+N_PARTICLES = 800
 
 class Ball:
 	def __init__(self, state: list, R: list, P: list, color: str, bound: list, bounce_uncertainty: bool, t_no_meas_start: float, t_no_meas_end: float, known_init_pos: bool=False):
@@ -154,9 +154,9 @@ def feasible_association_events(measurements, targets, gating=True):
 	One target can only be associated to a single measurement. 
 	'''
 	meas_linspace = np.arange(len(measurements)+1)
-	meas_linspace = np.append(meas_linspace, np.zeros(len(measurements), dtype=np.int16))
+	padding = np.zeros(max(len(measurements), len(targets)), dtype=np.int16)
+	meas_linspace = np.append(meas_linspace, padding)
 	perm_obj = multiset_permutations(meas_linspace, size=len(targets))
-	
 	permutations = []
 	for p in perm_obj:
 		check = True
@@ -172,6 +172,7 @@ def feasible_association_events(measurements, targets, gating=True):
 	if len(permutations) == 0:
 		print("No viable measurements")
 		measurements.clear()
+	
 	return np.array(permutations)
 
 def predictive_likelihood(measurement, target):	
@@ -190,7 +191,7 @@ def joint_event_posterior(measurements, targets, event, obs_error_dict):
 	Invalid detections (value 0) are omitted.
 	'''
 	P_D = 0.95
-	P_FA = 0.01
+	P_FA = 0.1
 	target_associations = np.count_nonzero(event!=0)
 	false_alarms = len(measurements) - target_associations
 	weight = P_FA ** false_alarms * (1 - P_D) ** (len(targets) - target_associations) * P_D ** target_associations
