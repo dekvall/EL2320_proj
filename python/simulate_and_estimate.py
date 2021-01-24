@@ -153,24 +153,24 @@ def feasible_association_events(measurements, targets, gating=True):
 	value "0" indicates invalid detection.
 	One target can only be associated to a single measurement. 
 	'''
-	meas_linspace = np.arange(len(measurements)+1) # Why is this + 1?
-	perm_obj = multiset_permutations(meas_linspace, size=len(targets))
-	
+	from itertools import product
+	meas_linspace = np.arange(len(measurements))
+
+	perm_obj = product(range(len(targets)), meas_linspace)
+
 	permutations = [] if gating else list(perm_obj)
 
 	if gating:
 		for p in perm_obj:
-			for t, m in enumerate(p):
-				if m != 0 and dist(measurements[m-1], targets[t]) > targets[t].gate_size**2:
-					break
-			else:
+			t, m = p
+			d = dist(measurements[m], targets[t])
+			if not dist(measurements[m], targets[t]) > targets[t].gate_size**2:
 				permutations.append(p)
 
 		# No viable measurements if all measurements outside of gates
 		if not permutations:
 			print("No viable measurements")
 			measurements.clear()
-
 	return np.array(permutations)
 
 def predictive_likelihood(measurement, target):	
@@ -190,17 +190,18 @@ def joint_event_posterior(measurements, targets, event, obs_error_dict):
 	'''
 	P_D = 0.95
 	P_FA = 0.01
+	print(event)
 	target_associations = np.count_nonzero(event!=0)
 	false_alarms = len(measurements) - target_associations
 	weight = P_FA ** false_alarms * (1 - P_D) ** (len(targets) - target_associations) * P_D ** target_associations
 	prod = 1
 	for t, m_idx  in enumerate(event):
 		if m_idx != 0:
-			if (m_idx-1, t) in obs_error_dict:
-				likelihood_sum = obs_error_dict[(m_idx-1, t)][0]
+			if (m_idx, t) in obs_error_dict:
+				likelihood_sum = obs_error_dict[(m_idx, t)][0]
 			else:
-				likelihood_sum, likelihood_array = predictive_likelihood(measurements[m_idx-1], targets[t])
-				obs_error_dict[(m_idx-1, t)] = (likelihood_sum, likelihood_array)
+				likelihood_sum, likelihood_array = predictive_likelihood(measurements[m_idx], targets[t])
+				obs_error_dict[(m_idx, t)] = (likelihood_sum, likelihood_array)
 
 			prod *= likelihood_sum
 	return weight*prod
@@ -215,13 +216,15 @@ def calc_beta(measurements, target_idx, targets, feasible_events):
 	feasible_events: np array of all feasible events
 	'''
 	obs_error_dict = {} # Dictionary used to remove duplicate computations of a target to a measurement
-	beta = np.zeros(len(measurements)+1)
+	beta = np.zeros(len(measurements)) # Why are all these + 1?
 	if len(measurements) != 0:
-		for m_idx in range(len(measurements)+1):
-			events_rows = np.where(feasible_events[:,target_idx]==m_idx)[0]
+		for m_idx in range(len(measurements)):
+			events_rows, *_ = np.where(feasible_events[:,target_idx]==m_idx)
+			print(events_rows)
 			events = feasible_events[events_rows,:]
-			for event in events:
-				beta[m_idx]+=joint_event_posterior(measurements, targets, event, obs_error_dict)
+			print(events)
+			for hypothesis in events:
+				beta[m_idx]+=joint_event_posterior(measurements, targets, hypothesis, obs_error_dict)
 
 	return beta, obs_error_dict
 
@@ -266,25 +269,26 @@ def monte_carlo_jpdaf_simulation(sim_time, delta_t, all_balls, meas_obj, plot_bo
 
 	# Determine if tracking or global localization
 	ball_idx = 0
-	if not all_balls[0].known_init_pos:
-		balls = [all_balls[0]]
-
+	first_ball = all_balls[0]
+	if not first_ball.known_init_pos:
+		balls = [first_ball]
 	else:
 		balls = all_balls
 
 	# Loop through specified simulation time
 	for t in np.arange(0, sim_time, delta_t):
 		# Initialization of new balls
-		if balls[-1].has_converged(covariance_threshold):
-			balls[-1].gate_size = 2
+		last_ball = balls[-1]
+		if last_ball.has_converged(covariance_threshold):
+			last_ball.gate_size = 2 # Make the gate smaller if the ball has converged
 			if ball_idx + 2 <= len(all_balls):
 				print("Ball nr ", ball_idx + 1, "Has converged, Initializing next ball")
 				all_balls[ball_idx+1].remove_particles(balls)
 				balls.append(all_balls[ball_idx+1])
 				ball_idx += 1
 		measurements = meas_obj.get_measurement(all_balls)
-		plt.clf()
 
+		plt.clf()
 		if not noplot:
 			plt.xlabel("X [m]")
 			plt.ylabel("Y [m]")
@@ -296,7 +300,7 @@ def monte_carlo_jpdaf_simulation(sim_time, delta_t, all_balls, meas_obj, plot_bo
 		feasible_events = feasible_association_events(measurements, balls)
 		for i, ball in enumerate(balls, start=1):
 			# Filter
-			beta, obs_error_dict = calc_beta(measurements, i-1, balls, feasible_events)
+			beta, obs_error_dict = calc_beta(measurements=measurements, target_idx=i-1, targets=balls, feasible_events=feasible_events)
 			ball.estimate(measurements, i-1, beta, obs_error_dict)
 			if (i == len(balls)) and not noplot:
 				plt.scatter(balls[-1].particles[:,0], balls[-1].particles[:,1], marker=".", c='y')
